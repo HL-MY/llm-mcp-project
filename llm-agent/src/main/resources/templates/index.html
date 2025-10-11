@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>LLM 流程编排器</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="container">
+    <div class="preview-pane">
+        <div class="status-panel">
+            <div class="panel-header">
+                <h2>流程状态</h2>
+                <button id="reset-btn" title="清空状态并自动保存本次对话记录">重置会话</button>
+            </div>
+            <ul id="process-status-list">
+                <li th:each="entry : ${initialState.processStatus}">
+                    <span th:class="${entry.value == 'COMPLETED' ? 'status-completed' : 'status-pending'}"></span>
+                    <span th:text="${entry.key}"></span>
+                </li>
+            </ul>
+        </div>
+        <div class="persona-panel">
+            <h2>当前人设 (预览)</h2>
+            <p id="persona-display" th:text="${initialState.persona}"></p>
+        </div>
+    </div>
+    <div class="chat-pane">
+        <div id="system-prompt" class="system-prompt-container">
+            <p>请在右侧配置工作流，然后点击“应用配置”开始。</p>
+        </div>
+        <div class="chat-window" id="chat-window"></div>
+        <div class="chat-input-area">
+            <textarea id="user-input" placeholder="输入你的指令..." rows="3"></textarea>
+            <button id="send-btn">发送</button>
+        </div>
+    </div>
+    <div class="config-pane">
+        <div class="config-panel">
+            <h2>工作流配置</h2>
+            <label for="processes-input">流程步骤 (每行一个, *结尾代表可重复)</label>
+            <textarea id="processes-input" rows="5">1. 需求沟通*&#13;&#10;2. 方案设计&#13;&#10;3. 编码实现&#13;&#10;4. 部署上线</textarea>
+            <label for="dependencies-input">依赖规则 (e.g., "4 -> 3")</label>
+            <textarea id="dependencies-input" rows="3">2 -> 1&#13;&#10;3 -> 2&#13;&#10;4 -> 3</textarea>
+            <label for="opening-monologue-input">模型开场白</label>
+            <textarea id="opening-monologue-input" rows="2" th:text="${initialState.getOpeningMonologue()}"></textarea>
+            <label for="persona-template-input">人设模板 (用 {tasks} 代表可用任务)</label>
+            <textarea id="persona-template-input" rows="6" th:text="${initialState.getRawPersonaTemplate()}"></textarea>
+
+            <h2 class="section-header">模型配置</h2>
+            <label for="model-name-input">模型名称</label>
+            <input type="text" id="model-name-input" th:value="${initialState.getModelName()}">
+            <div class="slider-container">
+                <label for="temperature-input">Temperature: <span id="temperature-value" th:text="${initialState.getTemperature()}"></span></label>
+                <input type="range" id="temperature-input" min="0" max="2" step="0.1" th:value="${initialState.getTemperature()}">
+            </div>
+            <div class="slider-container">
+                <label for="top-p-input">Top P: <span id="top-p-value" th:text="${initialState.getTopP()}"></span></label>
+                <input type="range" id="top-p-input" min="0.1" max="1" step="0.1" th:value="${initialState.getTopP()}">
+            </div>
+
+            <button id="save-config-btn">应用配置并清空对话</button>
+        </div>
+    </div>
+</div>
+<script src="/js/script.js"></script>
+</body>
+</html>
