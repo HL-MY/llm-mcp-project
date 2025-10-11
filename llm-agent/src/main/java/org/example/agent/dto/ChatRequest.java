@@ -1,4 +1,4 @@
-package example.agent.dto;
+package org.example.agent.dto;
 
 /**
  * @author hull

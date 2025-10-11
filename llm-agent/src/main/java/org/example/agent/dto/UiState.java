@@ -1,4 +1,4 @@
-package example.agent.dto;
+package org.example.agent.dto;
 import java.util.Map;
 public class UiState {
     private final Map<String, String> processStatus;

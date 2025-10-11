@@ -1,4 +1,4 @@
-package example.agent.service;
+package org.example.agent.service;
 
 import com.alibaba.dashscope.common.Message;
 import org.slf4j.Logger;

@@ -1,7 +1,7 @@
-package example.agent.component;
+package org.example.agent.component;
 
 
-import example.agent.service.WorkflowStateService;
+import org.example.agent.service.WorkflowStateService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.SessionScope;

@@ -1,4 +1,4 @@
-package example.agent.dto;
+package org.example.agent.dto;
 import java.util.List;
 public class ConfigurationRequest {
     private List<String> processes;

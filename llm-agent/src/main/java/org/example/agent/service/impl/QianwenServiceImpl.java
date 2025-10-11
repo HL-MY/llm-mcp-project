@@ -1,4 +1,4 @@
-package example.agent.service.impl;
+package org.example.agent.service.impl;
 
 import com.alibaba.dashscope.aigc.generation.Generation;
 import com.alibaba.dashscope.aigc.generation.GenerationParam;
@@ -7,7 +7,7 @@ import com.alibaba.dashscope.common.Message;
 import com.alibaba.dashscope.common.Role;
 import com.alibaba.dashscope.exception.InputRequiredException;
 import com.alibaba.dashscope.exception.NoApiKeyException;
-import com.alibaba.dashscope.tools.ToolBase;
+import com.alibaba.dashscope.tools.ToolBase; // 确保导入官方 ToolBase
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,9 +28,6 @@ public class QianwenServiceImpl {
     @Value("${llm.alibaba.api_key}")
     private String apiKey;
 
-    /**
-     * 支持函数调用的主聊天方法
-     */
     public GenerationResult chat(String sessionId, String userContent, String modelName, String persona,
                                  String openingMonologue, Map<String, Object> parameters, List<ToolBase> tools) {
 
@@ -47,6 +44,10 @@ public class QianwenServiceImpl {
         messagesForApiCall.add(userMessage);
 
         try {
+            if (modelName != null && modelName.toLowerCase().startsWith("qwen")) {
+                parameters.put("enable_thinking", false);
+            }
+
             GenerationParam.Builder paramBuilder = GenerationParam.builder()
                     .apiKey(apiKey)
                     .model(modelName)
@@ -55,7 +56,7 @@ public class QianwenServiceImpl {
                     .parameters(parameters);
 
             if (tools != null && !tools.isEmpty()) {
-                paramBuilder.tools(tools);
+                paramBuilder.tools(tools); // 直接使用，不再强制转换
             }
 
             GenerationResult result = new Generation().call(paramBuilder.build());
@@ -72,9 +73,6 @@ public class QianwenServiceImpl {
         }
     }
 
-    /**
-     * 用于函数调用后，将工具的执行结果返回给模型
-     */
     public GenerationResult callWithToolResult(String sessionId, String modelName, Map<String, Object> parameters,
                                                List<ToolBase> tools, Message toolCallMessage, Message toolResultMessage) {
 
@@ -83,13 +81,17 @@ public class QianwenServiceImpl {
         history.add(toolResultMessage);
 
         try {
+            if (modelName != null && modelName.toLowerCase().startsWith("qwen")) {
+                parameters.put("enable_thinking", false);
+            }
+
             GenerationParam param = GenerationParam.builder()
                     .apiKey(apiKey)
                     .model(modelName)
                     .messages(new ArrayList<>(history))
                     .resultFormat(GenerationParam.ResultFormat.MESSAGE)
                     .parameters(parameters)
-                    .tools(tools)
+                    .tools(tools) // 直接使用
                     .build();
 
             GenerationResult result = new Generation().call(param);

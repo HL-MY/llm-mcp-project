@@ -1,10 +1,11 @@
-package example.agent.controller;
+package org.example.agent.controller;
 
-import org.example.dto.ChatRequest;
-import org.example.dto.ChatResponse;
-import org.example.dto.ConfigurationRequest;
-import org.example.dto.UiState;
-import org.example.service.ChatService;
+
+import org.example.agent.dto.ChatRequest;
+import org.example.agent.dto.ChatResponse;
+import org.example.agent.dto.ConfigurationRequest;
+import org.example.agent.dto.UiState;
+import org.example.agent.service.ChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;

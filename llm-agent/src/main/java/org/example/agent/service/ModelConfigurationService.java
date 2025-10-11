@@ -1,4 +1,4 @@
-package example.agent.service;
+package org.example.agent.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.annotation.SessionScope;
