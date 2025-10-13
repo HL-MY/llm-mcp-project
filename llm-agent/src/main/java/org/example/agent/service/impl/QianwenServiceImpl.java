@@ -7,7 +7,8 @@ import com.alibaba.dashscope.common.Message;
 import com.alibaba.dashscope.common.Role;
 import com.alibaba.dashscope.exception.InputRequiredException;
 import com.alibaba.dashscope.exception.NoApiKeyException;
-import com.alibaba.dashscope.tools.ToolBase; // 确保导入官方 ToolBase
+import com.alibaba.dashscope.tools.ToolBase;
+import org.example.agent.model.tool.ToolDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,11 +45,24 @@ public class QianwenServiceImpl {
         messagesForApiCall.add(userMessage);
 
         try {
-            if (modelName != null && modelName.toLowerCase().startsWith("qwen")) {
+            // 【核心修正】逻辑反转：默认不加，只在需要时主动添加特殊参数
+            if ("qwen3-30b-a3b".equals(modelName)
+                    || "qwen3-235b-a22b".equals(modelName)
+                    || "qwen3-32b".equals(modelName)
+                    || "qwen3-14b".equals(modelName)
+                    || "qwen3-8b".equals(modelName)
+                    || "qwen3-4b".equals(modelName)
+                    || "qwen3-1.7b".equals(modelName)
+                    || "qwen3-0.6b".equals(modelName)
+            ) { // 将所有需要特殊参数的模型都列在这里
+
                 parameters.put("enable_thinking", false);
+                log.info("检测到特殊模型 '{}'，已添加 'enable_thinking: false' 参数。", modelName);
+            } else {
+                log.info("检测到标准模型 '{}'，使用标准参数。", modelName);
             }
 
-            GenerationParam.Builder paramBuilder = GenerationParam.builder()
+            GenerationParam.GenerationParamBuilder<?, ?> paramBuilder = GenerationParam.builder()
                     .apiKey(apiKey)
                     .model(modelName)
                     .messages(messagesForApiCall)
@@ -81,8 +95,21 @@ public class QianwenServiceImpl {
         history.add(toolResultMessage);
 
         try {
-            if (modelName != null && modelName.toLowerCase().startsWith("qwen")) {
+            // 【核心修正】逻辑反转：默认不加，只在需要时主动添加特殊参数
+            if ("qwen3-30b-a3b".equals(modelName)
+                    || "qwen3-235b-a22b".equals(modelName)
+                    || "qwen3-32b".equals(modelName)
+                    || "qwen3-14b".equals(modelName)
+                    || "qwen3-8b".equals(modelName)
+                    || "qwen3-4b".equals(modelName)
+                    || "qwen3-1.7b".equals(modelName)
+                    || "qwen3-0.6b".equals(modelName)
+            ) { // 将所有需要特殊参数的模型都列在这里
+
                 parameters.put("enable_thinking", false);
+                log.info("检测到特殊模型 '{}'，已添加 'enable_thinking: false' 参数。", modelName);
+            } else {
+                log.info("检测到标准模型 '{}'，使用标准参数。", modelName);
             }
 
             GenerationParam param = GenerationParam.builder()

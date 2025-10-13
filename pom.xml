@@ -20,6 +20,9 @@
         <spring-boot.version>3.2.4</spring-boot.version>
         <dashscope.version>2.13.0</dashscope.version>
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
+
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
     <dependencyManagement>
@@ -48,6 +51,7 @@
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
+                        <encoding>UTF-8</encoding>
                     </configuration>
                 </plugin>
             </plugins>
