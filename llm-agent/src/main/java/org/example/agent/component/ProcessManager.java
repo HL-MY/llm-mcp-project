@@ -1,12 +1,9 @@
 package org.example.agent.component;
 
-
 import org.example.agent.service.WorkflowStateService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.SessionScope;
-
-
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,7 +13,9 @@ import java.util.stream.Collectors;
 @Component
 public class ProcessManager {
 
-    public enum Status { PENDING, COMPLETED }
+    public enum Status {
+        PENDING, COMPLETED
+    }
 
     private final Map<String, Status> processStatus = new ConcurrentHashMap<>();
     private final WorkflowStateService workflowStateService;

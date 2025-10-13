@@ -24,13 +24,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.annotation.SessionScope;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Arrays;
 
 @Service
 @SessionScope
@@ -46,8 +49,8 @@ public class ChatService {
     private final ToolService toolService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private List<ToolDefinition> tools;
+    private int silentCount = 0;
 
-    // 构造函数包含了所有需要的服务
     public ChatService(QianwenServiceImpl qianwenService, ProcessManager processManager,
                        WorkflowStateService workflowStateService, ModelConfigurationService modelConfigurationService,
                        HistoryService historyService, HttpSession httpSession, ToolService toolService) {
@@ -63,57 +66,80 @@ public class ChatService {
     @PostConstruct
     public void initTools() {
         this.tools = new ArrayList<>(TelecomToolFactory.getAllToolDefinitions());
-        log.info("成功初始化 {} 个电信工具。", tools.size());
     }
 
     private String getSessionId() {
         return httpSession.getId();
     }
 
-    /**
-     * 【核心方法】处理用户消息，融合了流程控制和工具调用
-     */
-    public String processUserMessage(String userMessage) {
-        // 1. 检查流程是否已全部完成
+    public String processUserMessage(String userMessage) throws IOException {
+        long startTime = System.currentTimeMillis();
+
+        if (" ".equals(userMessage)) {
+            silentCount++;
+            log.info("检测到用户无声，当前连续无声次数: {}", silentCount);
+
+            if (silentCount >= 4) {
+                log.warn("用户连续无声达到 {} 次，强制结束对话。", silentCount);
+                forceCompleteAllProcesses();
+                silentCount = 0;
+                return "好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！";
+            } else {
+                List<String> cannedResponses = Arrays.asList(
+                        "喂，您好，能听到说话么？",
+                        "我这边是中国移动流量卡渠道商的，能听到说话么？",
+                        "喂？您好，这边听不到您的声音，是信号不好吗？"
+                );
+                return cannedResponses.get(silentCount - 1);
+            }
+        } else {
+            if (silentCount > 0) {
+                log.info("用户有正常回应，无声计数器重置。");
+                silentCount = 0;
+            }
+        }
+
         if (getAvailableProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
             return "🎉 恭喜！所有流程均已完成！";
         }
 
-        // 2. 构建包含当前可用任务的动态人设 (来自流程控制版本)
         String persona = buildDynamicPersona();
-
-        // 3. 准备模型参数和工具 (来自工具调用版本)
         String modelName = modelConfigurationService.getModelName();
         var parameters = modelConfigurationService.getParametersAsMap();
         List<ToolBase> sdkTools = convertToolsForSdk(this.tools);
         String openingMonologue = workflowStateService.getOpeningMonologue();
 
-        // 4. 调用大模型，同时传递工具定义
         GenerationResult result = qianwenService.chat(
                 getSessionId(), userMessage, modelName,
-                persona, // 使用动态人设
-                openingMonologue, parameters, sdkTools);
+                persona, openingMonologue, parameters, sdkTools);
 
         String finalContent;
-        boolean isToolCall = "tool_calls".equalsIgnoreCase(result.getOutput().getChoices().get(0).getFinishReason());
+        Message message = result.getOutput().getChoices().get(0).getMessage();
+        boolean isToolCall = message.getToolCalls() != null && !message.getToolCalls().isEmpty();
 
-        // 5. 判断是否需要调用工具 (来自工具调用版本)
         if (isToolCall) {
             finalContent = handleToolCalls(result, modelName, parameters, sdkTools);
         } else {
-            finalContent = result.getOutput().getChoices().get(0).getMessage().getContent();
-            qianwenService.addAssistantMessageToHistory(getSessionId(), finalContent);
+            finalContent = message.getContent();
         }
 
-        // 6. 【新增】在获得最终答复后，检查是否触发了流程推进
         checkForWorkflowCompletion(finalContent);
 
-        return finalContent;
+        long endTime = System.currentTimeMillis();
+        long responseTime = endTime - startTime;
+        log.info("ChatService 总处理耗时: {} ms", responseTime);
+
+        return finalContent + "\n\n(LLM 响应耗时: " + responseTime + " 毫秒)";
     }
 
-    /**
-     * 新增的私有方法，专门用于处理工具调用的逻辑，使主方法更清晰
-     */
+    private void forceCompleteAllProcesses() {
+        List<String> allProcesses = workflowStateService.getCurrentProcesses();
+        for (String process : allProcesses) {
+            log.info("强制完成流程: {}", process);
+            processManager.completeProcess(process);
+        }
+    }
+
     private String handleToolCalls(GenerationResult result, String modelName, Map<String, Object> parameters, List<ToolBase> sdkTools) {
         Message toolCallMessage = result.getOutput().getChoices().get(0).getMessage();
         List<ToolCall> toolCalls;
@@ -130,7 +156,6 @@ public class ChatService {
             return "抱歉，模型响应出现内部错误，无法执行工具。";
         }
 
-        // 暂只处理第一个工具调用
         ToolCall toolCall = toolCalls.get(0);
         String toolName = toolCall.getFunction().getName();
         String toolArgsString = toolCall.getFunction().getArguments();
@@ -150,41 +175,38 @@ public class ChatService {
                 .role("tool")
                 .content(toolResultContent)
                 .toolCallId(toolCall.getId())
+                // 【核心修复】移除不存在的 .name(toolName) 方法
                 .build();
 
         GenerationResult finalResult = qianwenService.callWithToolResult(
                 getSessionId(), modelName, parameters, sdkTools, toolCallMessage, toolResultMessage);
 
-        String finalContent = finalResult.getOutput().getChoices().get(0).getMessage().getContent();
-        qianwenService.addAssistantMessageToHistory(getSessionId(), finalContent);
-        return finalContent;
+        return finalResult.getOutput().getChoices().get(0).getMessage().getContent();
     }
 
-    /**
-     * 【新增】用于流程控制的方法，从LLM的回复中解析流程完成指令
-     */
     private void checkForWorkflowCompletion(String llmResponse) {
+        if (llmResponse == null || llmResponse.isEmpty()) {
+            return;
+        }
+
         List<String> availableProcesses = getAvailableProcesses();
         for (String process : availableProcesses) {
             String sanitizedProcess = sanitizeProcessName(process);
-            Pattern pattern = Pattern.compile("我已完成流程\\[(?:、.*→\\s*)?" + Pattern.quote(sanitizedProcess) + "\\]");
+            Pattern pattern = Pattern.compile("我已完成流程\\[" + Pattern.quote(sanitizedProcess) + "\\]");
             if (pattern.matcher(llmResponse).find()) {
-                log.info("检测到工作流步骤完成: {}", process);
+                log.info("检测到工作流步骤完成指令，匹配流程: '{}' (原始名: '{}')", sanitizedProcess, process);
                 processManager.completeProcess(process);
-                break; // 假设每次回复最多只完成一个流程
+                break;
             }
         }
     }
 
-
-    // --- 以下是两个版本中所有需要的辅助方法 ---
-
-    // 来自工具调用版本：转换工具为SDK格式
     private List<ToolBase> convertToolsForSdk(List<ToolDefinition> customTools) {
         if (customTools == null || customTools.isEmpty()) { return new ArrayList<>(); }
         List<ToolBase> sdkTools = new ArrayList<>();
         for (ToolDefinition customTool : customTools) {
             try {
+                // 【核心修复】确认 customFunction 变量定义无误
                 org.example.agent.model.tool.FunctionDefinition customFunction = customTool.getFunction();
                 String paramsJsonString = objectMapper.writeValueAsString(customFunction.getParameters());
                 JsonObject parametersAsJsonObject = JsonParser.parseString(paramsJsonString).getAsJsonObject();
@@ -197,13 +219,12 @@ public class ChatService {
                 sdkTools.add(ToolFunction.builder().function(sdkFunction).build());
             } catch (JsonProcessingException e) {
                 log.error("将自定义工具 '{}' 转换为SDK格式时失败", customTool.getFunction().getName(), e);
-                throw new RuntimeException("工具定义转换失败，无法继续执行。", e);
+                throw new RuntimeException("工具定义转换失败。", e);
             }
         }
         return sdkTools;
     }
 
-    // 来自工具调用版本：执行具体工具
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
             case "queryAllPlans": return toolService.queryAllPlans();
@@ -217,11 +238,10 @@ public class ChatService {
         }
     }
 
-    // 来自流程控制版本：构建动态人设
     private String buildDynamicPersona() {
         String personaTemplate = workflowStateService.getPersonaTemplate();
         List<String> availableProcesses = getAvailableProcesses();
-        String availableTasksStr = availableProcesses.isEmpty() ? "无" : sanitizeProcessNames(availableProcesses).stream().collect(Collectors.joining("、"));
+        String availableTasksStr = availableProcesses.isEmpty() ? "无" : sanitizeProcessNames(availableProcesses).stream().collect(Collectors.joining("→"));
         List<String> allProcesses = workflowStateService.getCurrentProcesses();
         String workflowStr = sanitizeProcessNames(allProcesses).stream().collect(Collectors.joining(" → "));
         return personaTemplate
@@ -229,7 +249,6 @@ public class ChatService {
                 .replace("{workflow}", workflowStr);
     }
 
-    // 来自流程控制版本：获取当前可执行的流程
     private List<String> getAvailableProcesses() {
         List<String> unfinished = processManager.getUnfinishedProcesses();
         Map<String, List<String>> rules = workflowStateService.getDependencyRules();
@@ -243,13 +262,15 @@ public class ChatService {
         List<String> repeatableAndCompleted = completed.stream()
                 .filter(task -> task.trim().endsWith("*"))
                 .collect(Collectors.toList());
-        return Stream.concat(availableFromPending.stream(), repeatableAndCompleted.stream())
-                .distinct()
-                .sorted((p1, p2) -> Integer.compare(allProcesses.indexOf(p1), allProcesses.indexOf(p2)))
+
+        List<String> combinedAvailable = Stream.concat(availableFromPending.stream(), repeatableAndCompleted.stream())
+                .distinct().collect(Collectors.toList());
+
+        return allProcesses.stream()
+                .filter(combinedAvailable::contains)
                 .collect(Collectors.toList());
     }
 
-    // 来自流程控制版本：清理流程名
     private String sanitizeProcessName(String processName) {
         String name = processName.trim();
         if (name.endsWith("*")) { name = name.substring(0, name.length() - 1); }
@@ -260,11 +281,10 @@ public class ChatService {
         return processNames.stream().map(this::sanitizeProcessName).collect(Collectors.toList());
     }
 
-    // --- UI状态和会话管理方法 ---
     public UiState getCurrentUiState() {
         var statuses = processManager.getAllProcesses().stream()
                 .collect(Collectors.toMap(p -> p, p -> processManager.getUnfinishedProcesses().contains(p) ? "PENDING" : "COMPLETED", (v1, v2) -> v1, LinkedHashMap::new));
-        String persona = buildDynamicPersona(); // 使用动态人设
+        String persona = buildDynamicPersona();
         String rawTemplate = workflowStateService.getPersonaTemplate();
         String openingMonologue = workflowStateService.getOpeningMonologue();
         return new UiState(statuses, persona, rawTemplate, openingMonologue,
@@ -275,23 +295,28 @@ public class ChatService {
 
     public void resetProcessesAndSaveHistory() {
         List<Message> history = qianwenService.popConversationHistory(getSessionId());
-        historyService.saveConversationToFile("", history);
+        if (history != null && !history.isEmpty()) {
+            historyService.saveConversationToFile("", history);
+        }
         processManager.reset();
+        this.silentCount = 0;
     }
 
     public void saveHistoryOnExit() {
         List<Message> history = qianwenService.getConversationHistory(getSessionId());
-        historyService.saveConversationToFile("", history);
+        if (history != null && !history.isEmpty()) {
+            historyService.saveConversationToFile("", history);
+        }
     }
 
     public void updateWorkflow(ConfigurationRequest config) {
-        List<Message> history = qianwenService.popConversationHistory(getSessionId());
-        historyService.saveConversationToFile("", history);
+        saveHistoryOnExit();
         workflowStateService.updateWorkflow(config.getProcesses(), config.getPersonaTemplate(), config.getDependencies(), config.getOpeningMonologue());
         processManager.updateProcesses(config.getProcesses());
         modelConfigurationService.updateModelName(config.getModelName());
         modelConfigurationService.updateTemperature(config.getTemperature());
         modelConfigurationService.updateTopP(config.getTopP());
-        // 清空历史记录
+        qianwenService.popConversationHistory(getSessionId());
+        this.silentCount = 0;
     }
 }

@@ -10,7 +10,7 @@ import java.util.Map;
 @SessionScope
 public class ModelConfigurationService {
 
-    private String modelName = "qwen3-30b-a3b"; // 默认使用一个标准的、不会出错的模型
+    private String modelName = "qwen3-next-80b-a3b-instruct"; // 默认使用一个标准的、不会出错的模型
     private double temperature = 0.7;
     private double topP = 0.8;
 
