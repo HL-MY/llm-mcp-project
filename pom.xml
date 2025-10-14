@@ -13,6 +13,7 @@
     <modules>
         <module>mcp-backend</module>
         <module>llm-agent</module>
+        <module>llm-client</module>
     </modules>
 
     <properties>
