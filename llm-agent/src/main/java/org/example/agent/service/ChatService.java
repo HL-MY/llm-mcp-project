@@ -253,6 +253,9 @@ public class ChatService {
                 String plan1 = args.get("planName1").asText();
                 String plan2 = args.get("planName2").asText();
                 return toolService.compareTwoPlans(plan1, plan2);
+            case "getPlanDetails":
+                String planName = args.get("planName").asText();
+                return toolService.getPlanDetails(planName);
             default:
                 log.warn("尝试调用一个未知的工具: {}", toolName);
                 return "{\"error\": \"未知工具\"}";
