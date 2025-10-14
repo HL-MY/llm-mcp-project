@@ -1,9 +1,10 @@
 package org.example.agent.factory;
 
-import org.example.agent.model.tool.FunctionDefinition;
-import org.example.agent.model.tool.ParameterProperty;
-import org.example.agent.model.tool.ParameterSchema;
-import org.example.agent.model.tool.ToolDefinition;
+import org.example.llm.dto.tool.FunctionDefinition;
+import org.example.llm.dto.tool.ParameterProperty;
+import org.example.llm.dto.tool.ParameterSchema;
+import org.example.llm.dto.tool.ToolDefinition;
+
 
 import java.util.List;
 import java.util.Map;

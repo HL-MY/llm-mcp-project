@@ -1,4 +1,4 @@
-package org.example.agent.model.tool;
+package org.example.llm.dto.tool;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -9,8 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 单个参数的属性定义。
- * 描述了每个参数的类型（如 "string"）和功能说明。
+ * 函数定义的核心模型。
+ * 描述了函数的名称、功能说明以及参数结构。
  */
 @Data
 @NoArgsConstructor
@@ -18,15 +18,20 @@ import lombok.NoArgsConstructor;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class ParameterProperty {
+public class FunctionDefinition {
 
     /**
-     * 参数的类型，例如 "string", "integer", "number", "boolean"。
+     * 函数的名称，必须是字母、数字和下划线的组合。
      */
-    private String type;
+    private String name;
 
     /**
-     * 对这个参数的描述，告诉大模型这个参数是用来做什么的。
+     * 对函数功能的详细描述，这部分内容会直接影响大模型对工具的理解和使用。
      */
     private String description;
+
+    /**
+     * 函数的参数结构定义。
+     */
+    private ParameterSchema parameters;
 }

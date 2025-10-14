@@ -12,10 +12,6 @@ public class DoubaoApiResp {
     private long created;
     private String model;
     private List<Choice> choices;
-
-    /**
-     * 【新增】Token 使用情况统计
-     */
     private Usage usage;
 
     @Data
@@ -34,5 +30,20 @@ public class DoubaoApiResp {
         private int completionTokens;
         @JsonProperty("total_tokens")
         private int totalTokens;
+    }
+
+    // 【新增】用于接收工具调用响应
+    @Data
+    public static class ToolCall {
+        private String id;
+        private String type;
+        private ToolCallFunction function;
+    }
+
+    // 【新增】用于接收工具调用响应
+    @Data
+    public static class ToolCallFunction {
+        private String name;
+        private String arguments;
     }
 }

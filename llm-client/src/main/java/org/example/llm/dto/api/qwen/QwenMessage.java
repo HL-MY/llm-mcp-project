@@ -7,8 +7,10 @@ package org.example.llm.dto.api.qwen;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
@@ -18,12 +20,13 @@ import java.util.List;
  */
 @Data
 @Builder
+@NoArgsConstructor  // <-- Add this annotation
+@AllArgsConstructor // <-- Add this annotation
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class QwenMessage {
     private String role;
     private String content;
 
-    // 【新增】用于发送和接收工具调用信息
     @JsonProperty("tool_calls")
     private List<QwenApiResp.ToolCall> toolCalls;
 }

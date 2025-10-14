@@ -1,23 +1,25 @@
 package org.example.llm.dto.api.doubao;
 
-/**
- * @author hull
- * @since 2025/10/14 15:46
- */
-
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-/**
- * 用于与豆包（及其他OpenAI兼容API）进行数据交换的 Message DTO。
- * 它的结构严格匹配API的JSON格式。
- */
+import java.util.List;
+
 @Data
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL) // 序列化时忽略null字段，以保持请求体干净
+@NoArgsConstructor  // <-- Add this annotation
+@AllArgsConstructor // <-- Add this annotation
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class DoubaoMessage {
 
     private String role;
     private String content;
+
+    // 【新增】用于发送和接收工具调用信息
+    @JsonProperty("tool_calls")
+    private List<DoubaoApiResp.ToolCall> toolCalls;
 }

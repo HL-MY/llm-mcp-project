@@ -59,4 +59,16 @@ public class PlanService {
         }
         return result;
     }
+    public Plan getPlanByName(String planName) {
+        if (planName == null) {
+            log.warn("查询套餐详情时收到的套餐名为空");
+            return null;
+        }
+        Plan plan = planData.get(planName);
+        if (plan == null) {
+            log.warn("查询套餐详情时未找到: {}", planName);
+        }
+        return plan;
+    }
+
 }

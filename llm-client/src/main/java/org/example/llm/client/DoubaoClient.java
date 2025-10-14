@@ -1,8 +1,7 @@
 package org.example.llm.client;
 
-
-import org.example.dto.api.doubao.DoubaoApiReq;
-import org.example.dto.api.doubao.DoubaoApiResp;
+import org.example.llm.dto.api.doubao.DoubaoApiReq;   // <-- 修正此行
+import org.example.llm.dto.api.doubao.DoubaoApiResp; // <-- 修正此行
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

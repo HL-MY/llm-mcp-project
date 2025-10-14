@@ -36,4 +36,20 @@ public class ToolService {
             return "{\"error\": \"无法比较套餐\"}";
         }
     }
+
+    /**
+     * 根据套餐名称获取该套餐的详细信息。
+     * @param planName 需要查询详情的套餐的完整名称。
+     * @return 包含套餐详情的 JSON 字符串。
+     */
+    public String getPlanDetails(String planName) {
+        log.info("ToolService: 正在直接调用 PlanService 获取套餐详情: {}", planName);
+        try {
+            // 直接调用 mcp-backend 模块中的 PlanService 来获取数据
+            return mapper.writeValueAsString(planService.getPlanByName(planName));
+        } catch (Exception e) {
+            log.error("调用 PlanService getPlanByName 失败", e);
+            return "{\"error\": \"无法获取套餐详情\"}";
+        }
+    }
 }
