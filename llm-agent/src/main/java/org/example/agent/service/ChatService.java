@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -196,14 +197,28 @@ public class ChatService {
             return;
         }
 
-        List<String> availableProcesses = getAvailableProcesses();
-        for (String process : availableProcesses) {
-            String sanitizedProcess = sanitizeProcessName(process);
-            Pattern pattern = Pattern.compile("我已完成流程\\[" + Pattern.quote(sanitizedProcess) + "\\]");
-            if (pattern.matcher(llmResponse).find()) {
-                log.info("检测到工作流步骤完成指令，匹配流程: '{}' (原始名: '{}')", sanitizedProcess, process);
-                processManager.completeProcess(process);
-                break;
+        // 使用能够直接捕获最后一个流程名的正则表达式
+        Pattern pattern = Pattern.compile("我已完成流程\\[(?:.*[—→>]\\s*)?([^\\]]+)\\]");
+        Matcher matcher = pattern.matcher(llmResponse);
+
+        if (matcher.find()) {
+            // 直接从捕获组1中获取最终的目标流程名
+            String targetProcessName = matcher.group(1);
+            if (targetProcessName == null || targetProcessName.trim().isEmpty()) {
+                return;
+            }
+            log.info("检测到工作流指令，并解析出目标流程名为: '{}'", targetProcessName);
+
+            // 遍历所有当前可执行的流程，进行精确匹配
+            List<String> availableProcesses = getAvailableProcesses();
+            for (String process : availableProcesses) {
+                String sanitizedProcessName = sanitizeProcessName(process);
+                if (targetProcessName.equals(sanitizedProcessName)) {
+                    log.info("目标流程 '{}' 匹配到可用流程 '{}' (原始名: '{}')。正在完成该流程。",
+                            targetProcessName, sanitizedProcessName, process);
+                    processManager.completeProcess(process);
+                    break; // 假设每次只完成一个流程
+                }
             }
         }
     }
