@@ -27,7 +27,7 @@ public class TelecomToolFactory {
 
         FunctionDefinition function = FunctionDefinition.builder()
                 .name("queryAllPlans")
-                .description("当用户第一次询问有什么套餐，或者想了解所有套餐选择时，必须调用此工具。")
+                .description("查询所有可用的电信套餐列表。")
                 .parameters(parameters)
                 .build();
 
@@ -44,8 +44,7 @@ public class TelecomToolFactory {
     public static ToolDefinition createCompareTwoPlansTool() {
         FunctionDefinition function = FunctionDefinition.builder()
                 .name("compareTwoPlans")
-                .description("当用户明确表示想要比较两个套餐时，或者在对话中提到了两个具体的套餐名并想知道它们的区别时，调用此工具。你需要从对话中准确提取两个套餐的完整名称作为参数，" +
-                        "例如 '用户原套餐' 和 '升档新套餐'。工具会返回这两个套餐的详细数据（如月租、流量、通话等），你需要基于这些数据，用口语化的方式为用户进行对比和总结。")
+                .description("获取两个指定套餐的详细信息以进行比较。")
                 .parameters(createCompareTwoPlansParameters()) // 调用私有方法构建参数
                 .build();
 
@@ -72,29 +71,6 @@ public class TelecomToolFactory {
                 .build();
     }
 
-    public static ToolDefinition createGetPlanDetailsTool() {
-        Map<String, ParameterProperty> properties = Map.of(
-                "planName", ParameterProperty.builder().type("string").description("需要查询详情的套餐的完整名称").build()
-        );
-
-        ParameterSchema parameters = ParameterSchema.builder()
-                .type("object")
-                .properties(properties)
-                .required(List.of("planName"))
-                .build();
-
-        FunctionDefinition function = FunctionDefinition.builder()
-                .name("getPlanDetails")
-                .description("当用户询问某个具体套餐的详细信息时，调用此工具获取该套餐的月租、流量、通话等数据。")
-                .parameters(parameters)
-                .build();
-
-        return ToolDefinition.builder()
-                .type("function")
-                .function(function)
-                .build();
-    }
-
 
     /**
      * 统一获取所有已定义的电信工具列表。
@@ -103,8 +79,7 @@ public class TelecomToolFactory {
     public static List<ToolDefinition> getAllToolDefinitions() {
         return List.of(
                 createQueryAllPlansTool(),
-                createCompareTwoPlansTool(),
-                createGetPlanDetailsTool()
+                createCompareTwoPlansTool()
         );
     }
 }

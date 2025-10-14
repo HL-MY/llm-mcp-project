@@ -36,14 +36,4 @@ public class ToolService {
             return "{\"error\": \"无法比较套餐\"}";
         }
     }
-
-    public String getPlanDetails(String planName) {
-        log.info("ToolService: 正在直接调用 PlanService 获取套餐详情: {}", planName);
-        try {
-            return mapper.writeValueAsString(planService.getPlanByName(planName));
-        } catch (Exception e) {
-            log.error("调用 PlanService getPlanByName 失败", e);
-            return "{\"error\": \"无法获取套餐详情\"}";
-        }
-    }
 }
