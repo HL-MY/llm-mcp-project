@@ -45,7 +45,7 @@
         <div class="config-panel">
             <h2>工作流配置</h2>
             <label for="processes-input">流程步骤 (每行一个, *结尾代表可重复)</label>
-            <textarea id="processes-input" rows="5" th:text="${#strings.listJoin(initialState.processStatus.keySet(), T(java.lang.System).lineSeparator())}"></textarea>
+            <textarea id="processes-input" rows="5">1. 产品介绍*&#13;&#10;2. 办理确认*&#13;&#10;3. 办理提醒*&#13;&#10;4. 再次确认*&#13;&#10;5. 结束语*</textarea>
             <label for="dependencies-input"> 依赖规则 (e.g., "4 -> 3") </label>
             <textarea id="dependencies-input" rows="3">2 -> 1&#13;&#10;3 -> 2&#13;&#10;4 -> 3&#13;&#10;5 -> 4</textarea>
             <label for="opening-monologue-input">模型开场白</label>

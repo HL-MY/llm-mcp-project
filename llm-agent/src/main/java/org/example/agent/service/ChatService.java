@@ -14,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpSession;
 import org.example.agent.component.ProcessManager;
 import org.example.agent.dto.ConfigurationRequest;
+import org.example.agent.dto.ToolCallInfo;
 import org.example.agent.dto.UiState;
 import org.example.agent.factory.TelecomToolFactory;
 import org.example.agent.model.tool.ToolCall;
@@ -72,7 +73,7 @@ public class ChatService {
         return httpSession.getId();
     }
 
-    public String processUserMessage(String userMessage) throws IOException {
+    public ChatCompletion processUserMessage(String userMessage) throws IOException {
         long startTime = System.currentTimeMillis();
 
         if (" ".equals(userMessage)) {
@@ -83,14 +84,14 @@ public class ChatService {
                 log.warn("用户连续无声达到 {} 次，强制结束对话。", silentCount);
                 forceCompleteAllProcesses();
                 silentCount = 0;
-                return "好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！";
+                return new ChatCompletion("好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！", null);
             } else {
                 List<String> cannedResponses = Arrays.asList(
                         "喂，您好，能听到说话么？",
                         "我这边是中国移动流量卡渠道商的，能听到说话么？",
                         "喂？您好，这边听不到您的声音，是信号不好吗？"
                 );
-                return cannedResponses.get(silentCount - 1);
+                return new ChatCompletion(cannedResponses.get(silentCount - 1), null);
             }
         } else {
             if (silentCount > 0) {
@@ -100,7 +101,7 @@ public class ChatService {
         }
 
         if (getAvailableProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
-            return "🎉 恭喜！所有流程均已完成！";
+            return new ChatCompletion("🎉 恭喜！所有流程均已完成！", null);
         }
 
         String persona = buildDynamicPersona();
@@ -114,11 +115,14 @@ public class ChatService {
                 persona, openingMonologue, parameters, sdkTools);
 
         String finalContent;
+        ToolCallInfo toolCallInfo = null;
         Message message = result.getOutput().getChoices().get(0).getMessage();
         boolean isToolCall = message.getToolCalls() != null && !message.getToolCalls().isEmpty();
 
         if (isToolCall) {
-            finalContent = handleToolCalls(result, modelName, parameters, sdkTools);
+            ChatCompletion toolCallCompletion = handleToolCalls(result, modelName, parameters, sdkTools);
+            finalContent = toolCallCompletion.reply();
+            toolCallInfo = toolCallCompletion.toolCallInfo();
         } else {
             finalContent = message.getContent();
         }
@@ -129,7 +133,8 @@ public class ChatService {
         long responseTime = endTime - startTime;
         log.info("ChatService 总处理耗时: {} ms", responseTime);
 
-        return finalContent + "\n\n(LLM 响应耗时: " + responseTime + " 毫秒)";
+        String finalReply = finalContent + "\n\n(LLM 响应耗时: " + responseTime + " 毫秒)";
+        return new ChatCompletion(finalReply, toolCallInfo);
     }
 
     private void forceCompleteAllProcesses() {
@@ -140,7 +145,7 @@ public class ChatService {
         }
     }
 
-    private String handleToolCalls(GenerationResult result, String modelName, Map<String, Object> parameters, List<ToolBase> sdkTools) {
+    private ChatCompletion handleToolCalls(GenerationResult result, String modelName, Map<String, Object> parameters, List<ToolBase> sdkTools) {
         Message toolCallMessage = result.getOutput().getChoices().get(0).getMessage();
         List<ToolCall> toolCalls;
         try {
@@ -148,12 +153,12 @@ public class ChatService {
             toolCalls = objectMapper.readValue(toolCallsJson, new TypeReference<List<ToolCall>>() {});
         } catch (Exception e) {
             log.error("手动转换ToolCall对象时出错", e);
-            return "抱歉，模型返回的工具调用格式不兼容，转换失败。";
+            return new ChatCompletion("抱歉，模型返回的工具调用格式不兼容，转换失败。", null);
         }
 
         if (toolCalls == null || toolCalls.isEmpty()) {
             log.error("模型返回tool_calls，但解析后的toolCalls列表为空。");
-            return "抱歉，模型响应出现内部错误，无法执行工具。";
+            return new ChatCompletion("抱歉，模型响应出现内部错误，无法执行工具。", null);
         }
 
         ToolCall toolCall = toolCalls.get(0);
@@ -166,22 +171,24 @@ public class ChatService {
             toolArgs = objectMapper.readTree(toolArgsString);
         } catch (JsonProcessingException e) {
             log.error("解析工具参数JSON时出错: {}", toolArgsString, e);
-            return "抱歉，模型返回的工具参数格式不正确。";
+            return new ChatCompletion("抱歉，模型返回的工具参数格式不正确。", null);
         }
 
         String toolResultContent = executeTool(toolName, toolArgs);
+
+        ToolCallInfo toolCallInfo = new ToolCallInfo(toolName, toolArgsString, toolResultContent);
 
         Message toolResultMessage = Message.builder()
                 .role("tool")
                 .content(toolResultContent)
                 .toolCallId(toolCall.getId())
-                // 【核心修复】移除不存在的 .name(toolName) 方法
                 .build();
 
         GenerationResult finalResult = qianwenService.callWithToolResult(
                 getSessionId(), modelName, parameters, sdkTools, toolCallMessage, toolResultMessage);
 
-        return finalResult.getOutput().getChoices().get(0).getMessage().getContent();
+        String finalReply = finalResult.getOutput().getChoices().get(0).getMessage().getContent();
+        return new ChatCompletion(finalReply, toolCallInfo);
     }
 
     private void checkForWorkflowCompletion(String llmResponse) {
@@ -206,7 +213,6 @@ public class ChatService {
         List<ToolBase> sdkTools = new ArrayList<>();
         for (ToolDefinition customTool : customTools) {
             try {
-                // 【核心修复】确认 customFunction 变量定义无误
                 org.example.agent.model.tool.FunctionDefinition customFunction = customTool.getFunction();
                 String paramsJsonString = objectMapper.writeValueAsString(customFunction.getParameters());
                 JsonObject parametersAsJsonObject = JsonParser.parseString(paramsJsonString).getAsJsonObject();
@@ -319,4 +325,6 @@ public class ChatService {
         qianwenService.popConversationHistory(getSessionId());
         this.silentCount = 0;
     }
+
+    public static record ChatCompletion(String reply, ToolCallInfo toolCallInfo) {}
 }

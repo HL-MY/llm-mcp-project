@@ -55,6 +55,43 @@ document.addEventListener('DOMContentLoaded', () => {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     };
 
+    const addToolCallToChat = (toolCall) => {
+        const toolDiv = document.createElement('div');
+        toolDiv.className = 'message tool-call-message';
+
+        const toolName = document.createElement('h3');
+        toolName.innerHTML = `🛠️ Tool Call: <code>${toolCall.toolName}</code>`;
+        toolDiv.appendChild(toolName);
+
+        // Display Arguments
+        const argsTitle = document.createElement('h4');
+        argsTitle.textContent = 'Arguments:';
+        toolDiv.appendChild(argsTitle);
+        const argsPre = document.createElement('pre');
+        try {
+            // Pretty-print the JSON arguments
+            argsPre.textContent = JSON.stringify(JSON.parse(toolCall.toolArgs), null, 2);
+        } catch (e) {
+            argsPre.textContent = toolCall.toolArgs; // Fallback for non-JSON arguments
+        }
+        toolDiv.appendChild(argsPre);
+
+        // Display Result
+        const resultTitle = document.createElement('h4');
+        resultTitle.textContent = 'Result:';
+        toolDiv.appendChild(resultTitle);
+        const resultPre = document.createElement('pre');
+        try {
+            // Pretty-print the JSON result if possible
+            resultPre.textContent = JSON.stringify(JSON.parse(toolCall.toolResult), null, 2);
+        } catch (e) {
+            resultPre.textContent = toolCall.toolResult; // Fallback for non-JSON result
+        }
+        toolDiv.appendChild(resultPre);
+
+        chatWindow.appendChild(toolDiv);
+    };
+
     const updateUiState = (state) => {
         processStatusList.innerHTML = '';
         if (state.processStatus) {
@@ -104,6 +141,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(await response.text());
             }
             const data = await response.json();
+
+            // ** NEW: Check for and display tool call information **
+            if (data.toolCall) {
+                addToolCallToChat(data.toolCall);
+            }
+
             addMessageToChat('bot', data.reply);
             updateUiState(data.uiState);
         } catch (error) {

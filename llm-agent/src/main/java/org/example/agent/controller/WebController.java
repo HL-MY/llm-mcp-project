@@ -1,11 +1,11 @@
 package org.example.agent.controller;
 
-
 import org.example.agent.dto.ChatRequest;
 import org.example.agent.dto.ChatResponse;
 import org.example.agent.dto.ConfigurationRequest;
 import org.example.agent.dto.UiState;
 import org.example.agent.service.ChatService;
+import org.example.agent.service.ChatService.ChatCompletion; // Import the inner record
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -37,9 +37,11 @@ public class WebController {
     @ResponseBody
     public ResponseEntity<?> handleChat(@RequestBody ChatRequest chatRequest) {
         try {
-            String llmReply = chatService.processUserMessage(chatRequest.getMessage());
+            ChatCompletion completion = chatService.processUserMessage(chatRequest.getMessage());
             UiState updatedState = chatService.getCurrentUiState();
-            return ResponseEntity.ok(new ChatResponse(llmReply, updatedState));
+            // Create the final response, now including the tool call info
+            ChatResponse response = new ChatResponse(completion.reply(), updatedState, completion.toolCallInfo());
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("处理聊天请求时出错", e);
             return ResponseEntity.status(500).body("处理您的请求时出错: " + e.getMessage());
