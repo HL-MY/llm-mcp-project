@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 @SessionScope
 public class WorkflowStateService {
 
-    private List<String> currentProcesses = new ArrayList<>(Arrays.asList("1. 产品介绍*", "2. 办理确认*", "3. 办理提醒*", "4. 再次确认*", "5. 结束语*"));
+    private List<String> currentProcesses = new ArrayList<>(Arrays.asList("1. 产品介绍*", "2. 升级确认*", "3. 升级提醒*", "4. 升级成功通知*", "5. 结束语*"));
 
     private String personaTemplate = "你是一名顶级的电信公司外呼专家，你的任务不是简单地回答问题，而是通过自然、流畅、有亲和力的对话，向用户介绍和比较电信套餐。" +
             "你的沟通风格应遵循以下原则：" +
