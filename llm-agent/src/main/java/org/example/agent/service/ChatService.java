@@ -98,7 +98,7 @@ public class ChatService {
         String openingMonologue = workflowStateService.getOpeningMonologue();
 
         LlmResponse result = getLlmService().chat(getSessionId(), userMessage, modelName, persona, openingMonologue, parameters, tools);
-
+        log.info("【LLM原始响应】\n{}", result.getContent());
         String finalContent;
         ToolCallInfo toolCallInfo = null;
         if (result.hasToolCalls()) {
@@ -141,7 +141,7 @@ public class ChatService {
         LlmMessage toolResultMessage = LlmMessage.builder().role(LlmMessage.Role.TOOL).content(toolResultContent).build();
 
         LlmResponse finalResult = getLlmService().chatWithToolResult(getSessionId(), modelName, parameters, tools, toolCallMessage, toolResultMessage);
-
+        log.info("【LLM工具调用后原始响应】\n{}", finalResult.getContent());
         return new ChatCompletion(finalResult.getContent(), toolCallInfo);
     }
 
@@ -161,12 +161,10 @@ public class ChatService {
 
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
-            case "queryAllPlans":
-                return toolService.queryAllPlans();
             case "compareTwoPlans":
                 return toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText());
-            case "getPlanDetails":
-                return toolService.getPlanDetails(args.get("planName").asText());
+                case "queryMcpFaq":
+                    return toolService.queryMcpFaq(args.get("intent").asText());
             default:
                 return "{\"error\": \"未知工具\"}";
         }

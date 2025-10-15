@@ -21,7 +21,8 @@ import java.util.stream.Collectors;
 public class PlanService {
 
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
-    private Map<String, Plan> planData = Collections.emptyMap();
+    // 将 planData 的值类型改为 Plan 对象，以便存储和检索
+    private Map<String, Plan> planAliasMap = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -32,43 +33,48 @@ public class PlanService {
             }
             ObjectMapper mapper = new ObjectMapper();
             List<Plan> plans = mapper.readValue(inputStream, new TypeReference<>() {});
-            this.planData = plans.stream().collect(Collectors.toMap(Plan::getName, Function.identity()));
-            log.info("✅ PlanService: 成功加载 {} 个套餐数据。", planData.size());
+
+            // 构建一个包含所有别名的查找映射
+            this.planAliasMap = new HashMap<>();
+            for (Plan plan : plans) {
+                // 1. 添加正式名称作为键
+                planAliasMap.put(plan.getName(), plan);
+                // 2. 如果存在别名，添加所有别名作为键
+                if (plan.getAliases() != null) {
+                    for (String alias : plan.getAliases()) {
+                        // 使用 computeIfAbsent 避免覆盖，并可以记录别名冲突
+                        planAliasMap.computeIfAbsent(alias, k -> {
+                            log.info("为套餐 '{}' 映射别名: '{}'", plan.getName(), k);
+                            return plan;
+                        });
+                    }
+                }
+            }
+
+            log.info("✅ PlanService: 成功加载 {} 个套餐数据，并构建了别名映射。", plans.size());
         } catch (Exception e) {
             log.error("❌ PlanService: 初始化套餐数据时发生严重错误。", e);
         }
     }
 
-    public Set<String> getAllPlanNames() {
-        return planData.keySet();
-    }
-
     public Map<String, Plan> compareTwoPlans(String planName1, String planName2) {
         Map<String, Plan> result = new HashMap<>();
-        Plan p1 = planData.get(planName1);
+        // 使用新的别名映射进行查找
+        Plan p1 = planAliasMap.get(planName1);
         if (p1 != null) {
-            result.put(planName1, p1);
+            // 始终使用 plan 的正式名称作为结果的 key，保持一致性
+            result.put(p1.getName(), p1);
         } else {
             log.warn("比较套餐时未找到: {}", planName1);
         }
-        Plan p2 = planData.get(planName2);
+
+        Plan p2 = planAliasMap.get(planName2);
         if (p2 != null) {
-            result.put(planName2, p2);
+            result.put(p2.getName(), p2);
         } else {
             log.warn("比较套餐时未找到: {}", planName2);
         }
         return result;
-    }
-    public Plan getPlanByName(String planName) {
-        if (planName == null) {
-            log.warn("查询套餐详情时收到的套餐名为空");
-            return null;
-        }
-        Plan plan = planData.get(planName);
-        if (plan == null) {
-            log.warn("查询套餐详情时未找到: {}", planName);
-        }
-        return plan;
     }
 
 }

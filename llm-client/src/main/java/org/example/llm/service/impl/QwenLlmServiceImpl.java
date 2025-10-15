@@ -21,6 +21,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set; // 引入 Set
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -44,6 +45,8 @@ public class QwenLlmServiceImpl implements LlmService {
         return modelName != null && modelName.toLowerCase().startsWith("qwen");
     }
 
+    // --- 旧的 handleSpecialModelParameters 方法已被移除，因为其逻辑已整合到 buildQwenRequest 中 ---
+
     @Override
     public LlmResponse chat(String sessionId, String userContent, String modelName, String persona,
                             String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools) {
@@ -57,7 +60,22 @@ public class QwenLlmServiceImpl implements LlmService {
         QwenApiReq request = buildQwenRequest(modelName, parameters, messagesForApiCall, tools);
 
         try {
+            // 打印即将发送的完整请求 (用于调试)
+            try {
+                log.info("【发送给大模型的完整请求】\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(request));
+            } catch (JsonProcessingException e) {
+                log.error("序列化请求JSON失败", e);
+            }
+
             QwenApiResp response = qianwenClient.chatCompletions("Bearer " + apiKey, request);
+
+            // 打印完整原始响应 (用于调试)
+            try {
+                log.info("【通义千问 API 完整原始响应】\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response));
+            } catch (JsonProcessingException e) {
+                log.error("序列化通义千问响应JSON失败", e);
+            }
+
             log.info("成功调用通义千问模型, RequestId: {}", response.getRequestId());
 
             if (response.getOutput() == null || response.getOutput().getChoices() == null || response.getOutput().getChoices().isEmpty()) {
@@ -88,6 +106,14 @@ public class QwenLlmServiceImpl implements LlmService {
 
         try {
             QwenApiResp response = qianwenClient.chatCompletions("Bearer " + apiKey, request);
+
+            // 打印工具调用后的完整原始响应 (用于调试)
+            try {
+                log.info("【通义千问工具调用后 API 完整原始响应】\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response));
+            } catch (JsonProcessingException e) {
+                log.error("序列化通义千问响应JSON失败", e);
+            }
+
             log.info("携带工具结果成功调用通义千问模型, RequestId: {}", response.getRequestId());
             if (response.getOutput() == null || response.getOutput().getChoices() == null || response.getOutput().getChoices().isEmpty()) {
                 throw new RuntimeException("模型API返回结果格式不正确。");
@@ -118,6 +144,11 @@ public class QwenLlmServiceImpl implements LlmService {
         return messagesForApiCall;
     }
 
+    /**
+     * --- 这是修改后的核心方法 ---
+     * 构建对通义千问API的请求。
+     * 该方法现在包含根据模型名称决定是否添加 'enable_thinking' 参数的逻辑。
+     */
     private QwenApiReq buildQwenRequest(String modelName, Map<String, Object> parameters, List<LlmMessage> messages, List<ToolDefinition> tools) {
         List<QwenMessage> qwenMessages = messages.stream()
                 .map(this::convertLlmMessageToQwenMessage)
@@ -128,6 +159,14 @@ public class QwenLlmServiceImpl implements LlmService {
                 .temperature(((Double) parameters.getOrDefault("temperature", 0.7)).floatValue())
                 .topP(((Double) parameters.getOrDefault("top_p", 0.8)).floatValue());
 
+        // 【关键逻辑】根据模型名称，决定是否添加 enable_thinking: false
+        if (isSpecialModel(modelName)) {
+            qwenParamsBuilder.enableThinking(false); // 确保您的 DTO Builder 中有这个方法
+            log.info("检测到特定模型 '{}'，已添加 'enable_thinking: false' 参数。", modelName);
+        } else {
+            log.info("检测到标准模型 '{}'，不添加 'enable_thinking' 参数。", modelName);
+        }
+
         if (!CollectionUtils.isEmpty(tools)) {
             qwenParamsBuilder.tools(tools);
         }
@@ -137,6 +176,23 @@ public class QwenLlmServiceImpl implements LlmService {
                 .input(QwenApiReq.Input.builder().messages(qwenMessages).build())
                 .parameters(qwenParamsBuilder.build())
                 .build();
+    }
+
+    /**
+     * --- 这是新增的辅助方法 ---
+     * 判断模型名称是否属于需要添加 'enable_thinking: false' 参数的特定列表。
+     * @param modelName 模型名称
+     * @return 如果是特定模型则返回 true，否则返回 false
+     */
+    private boolean isSpecialModel(String modelName) {
+        if (modelName == null) {
+            return false;
+        }
+        // 使用 Set.of 提供更高效、更简洁的判断方式
+        return Set.of(
+                "qwen3-30b-a3b", "qwen3-235b-a22b", "qwen3-32b", "qwen3-14b",
+                "qwen3-8b", "qwen3-4b", "qwen3-1.7b", "qwen3-0.6b"
+        ).contains(modelName);
     }
 
     private LlmResponse parseQwenResponse(QwenMessage qwenMessage) {
@@ -180,7 +236,8 @@ public class QwenLlmServiceImpl implements LlmService {
                 log.error("反序列化通义千问 tool_calls 失败", e);
             }
         }
-        if(LlmMessage.Role.TOOL.equals(llmMessage.getRole())){
+        if (LlmMessage.Role.TOOL.equals(llmMessage.getRole())) {
+            // 注意：这里可能需要根据通义千问的API要求进行调整，tool角色的消息格式可能不同
             return QwenMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
         }
         return QwenMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();

@@ -1,6 +1,7 @@
 package org.example.agent.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.mcp.service.FaqService;
 import org.example.mcp.service.PlanService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,20 +12,13 @@ public class ToolService {
 
     private static final Logger log = LoggerFactory.getLogger(ToolService.class);
     private final PlanService planService;
+
+    private final FaqService faqService;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ToolService(PlanService planService) {
+    public ToolService(PlanService planService, FaqService faqService) {
         this.planService = planService;
-    }
-
-    public String queryAllPlans() {
-        log.info("ToolService: 正在直接调用 PlanService 获取所有套餐...");
-        try {
-            return mapper.writeValueAsString(planService.getAllPlanNames());
-        } catch (Exception e) {
-            log.error("调用 PlanService queryAllPlans 失败", e);
-            return "{\"error\": \"无法获取套餐列表\"}";
-        }
+        this.faqService = faqService;
     }
 
     public String compareTwoPlans(String planName1, String planName2) {
@@ -38,18 +32,19 @@ public class ToolService {
     }
 
     /**
-     * 根据套餐名称获取该套餐的详细信息。
-     * @param planName 需要查询详情的套餐的完整名称。
-     * @return 包含套餐详情的 JSON 字符串。
+     * 新增：执行FAQ查询的工具方法
+     *
+     * @param intent 从模型传入的用户意图
+     * @return 从FaqService获取的标准答案
      */
-    public String getPlanDetails(String planName) {
-        log.info("ToolService: 正在直接调用 PlanService 获取套餐详情: {}", planName);
+    public String queryMcpFaq(String intent) {
+        log.info("ToolService: 正在调用 FaqService 查询FAQ, 意图: {}", intent);
         try {
-            // 直接调用 mcp-backend 模块中的 PlanService 来获取数据
-            return mapper.writeValueAsString(planService.getPlanByName(planName));
+            // 直接调用 faqService 并返回其结果
+            return faqService.getAnswerForIntent(intent);
         } catch (Exception e) {
-            log.error("调用 PlanService getPlanByName 失败", e);
-            return "{\"error\": \"无法获取套餐详情\"}";
+            log.error("调用 FaqService queryMcpFaq 失败", e);
+            return "{\"error\": \"无法查询常见问题答案\"}";
         }
     }
 }
