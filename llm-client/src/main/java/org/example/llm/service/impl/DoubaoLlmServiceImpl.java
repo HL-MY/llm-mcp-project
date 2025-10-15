@@ -16,10 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -114,6 +111,7 @@ public class DoubaoLlmServiceImpl implements LlmService {
         return messagesForApiCall;
     }
 
+    // --- buildDoubaoRequest 方法已更新 ---
     private DoubaoApiReq buildDoubaoRequest(String modelName, Map<String, Object> parameters, List<LlmMessage> messages, List<ToolDefinition> tools) {
         List<DoubaoMessage> apiMessages = messages.stream()
                 .map(this::convertLlmMessageToDoubaoMessage)
@@ -125,7 +123,18 @@ public class DoubaoLlmServiceImpl implements LlmService {
                 .temperature((Double) parameters.get("temperature"))
                 .topP((Double) parameters.get("top_p"));
 
-        // 豆包/火山引擎的 tool 调用参数
+        // 参数映射
+        if (parameters.containsKey("max_tokens")) {
+            requestBuilder.maxTokens((Integer) parameters.get("max_tokens"));
+        }
+        if (parameters.containsKey("presence_penalty")) {
+            requestBuilder.presencePenalty((Double) parameters.get("presence_penalty"));
+        }
+        if (parameters.containsKey("frequency_penalty")) {
+            requestBuilder.frequencyPenalty((Double) parameters.get("frequency_penalty"));
+        }
+        // [已移除] stop 和 stream 的处理逻辑
+
         if (!CollectionUtils.isEmpty(tools)) {
             requestBuilder.tools(tools);
         }
@@ -133,6 +142,7 @@ public class DoubaoLlmServiceImpl implements LlmService {
         return requestBuilder.build();
     }
 
+    // ... [parseDoubaoResponse, convert...Message, get/pop ConversationHistory 等方法保持不变] ...
     private LlmResponse parseDoubaoResponse(DoubaoMessage doubaoMessage) {
         List<LlmToolCall> llmToolCalls = null;
         if (!CollectionUtils.isEmpty(doubaoMessage.getToolCalls())) {
@@ -154,7 +164,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
         String content = doubaoMessage.getContent();
         if (!CollectionUtils.isEmpty(doubaoMessage.getToolCalls())) {
             try {
-                // 将 tool_calls 对象序列化为 JSON 字符串存入 content
                 content = objectMapper.writeValueAsString(doubaoMessage.getToolCalls());
             } catch (JsonProcessingException e) {
                 log.error("序列化豆包 tool_calls 失败", e);
@@ -167,8 +176,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
     }
 
     private DoubaoMessage convertLlmMessageToDoubaoMessage(LlmMessage llmMessage) {
-        // 当我们自己的 LlmMessage 是 assistant 角色且内容是 tool_calls 的 JSON 字符串时，
-        // 需要反序列化并构建回 DoubaoMessage 的 tool_calls 结构
         if (LlmMessage.Role.ASSISTANT.equals(llmMessage.getRole()) && llmMessage.getContent() != null && llmMessage.getContent().contains("function")) {
             try {
                 List<DoubaoApiResp.ToolCall> toolCalls = objectMapper.readValue(llmMessage.getContent(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
@@ -177,15 +184,11 @@ public class DoubaoLlmServiceImpl implements LlmService {
                 log.warn("反序列化为豆包 tool_calls 失败，将作为纯文本处理: {}", e.getMessage());
             }
         }
-        // 当消息是工具执行结果时
         if (LlmMessage.Role.TOOL.equals(llmMessage.getRole())) {
-            // 注意：豆包的 tool role 消息结构可能需要 tool_call_id，这里需要根据其官方文档调整
-            // 暂时简化处理，作为 content 发送
             return DoubaoMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
         }
         return DoubaoMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
     }
-
 
     @Override
     public List<LlmMessage> getConversationHistory(String sessionId) {

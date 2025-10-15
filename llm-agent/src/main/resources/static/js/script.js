@@ -13,16 +13,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const openingMonologueInput = document.getElementById('opening-monologue-input');
     const personaTemplateInput = document.getElementById('persona-template-input');
     const modelNameInput = document.getElementById('model-name-input');
+
+    // 滑动条
     const temperatureInput = document.getElementById('temperature-input');
     const temperatureValue = document.getElementById('temperature-value');
     const topPInput = document.getElementById('top-p-input');
     const topPValue = document.getElementById('top-p-value');
+    const repetitionPenaltyInput = document.getElementById('repetition-penalty-input');
+    const repetitionPenaltyValue = document.getElementById('repetition-penalty-value');
+    const presencePenaltyInput = document.getElementById('presence-penalty-input');
+    const presencePenaltyValue = document.getElementById('presence-penalty-value');
+    const frequencyPenaltyInput = document.getElementById('frequency-penalty-input');
+    const frequencyPenaltyValue = document.getElementById('frequency-penalty-value');
+
+    // 其他参数
+    const maxTokensInput = document.getElementById('max-tokens-input');
+
+    // [已移除] stopInput, streamInput, seedInput, enableSearchInput, enableThinkingInput 的元素获取
 
     let chatActivity = chatWindow.querySelector('.message') !== null;
     if (chatActivity) {
         systemPrompt.classList.add('hidden');
     }
 
+    // [ addMessageToChat 和 addToolCallToChat 函数保持不变 ]
     const addMessageToChat = (sender, text) => {
         chatActivity = true;
         systemPrompt.classList.add('hidden');
@@ -60,39 +74,37 @@ document.addEventListener('DOMContentLoaded', () => {
         toolDiv.className = 'message tool-call-message';
 
         const toolName = document.createElement('h3');
-        toolName.innerHTML = `🛠️ Tool Call: <code>${toolCall.toolName}</code>`;
+        toolName.innerHTML = `🛠️ 工具调用: <code>${toolCall.toolName}</code>`;
         toolDiv.appendChild(toolName);
 
-        // Display Arguments
         const argsTitle = document.createElement('h4');
-        argsTitle.textContent = 'Arguments:';
+        argsTitle.textContent = '参数:';
         toolDiv.appendChild(argsTitle);
         const argsPre = document.createElement('pre');
         try {
-            // Pretty-print the JSON arguments
             argsPre.textContent = JSON.stringify(JSON.parse(toolCall.toolArgs), null, 2);
         } catch (e) {
-            argsPre.textContent = toolCall.toolArgs; // Fallback for non-JSON arguments
+            argsPre.textContent = toolCall.toolArgs;
         }
         toolDiv.appendChild(argsPre);
 
-        // Display Result
         const resultTitle = document.createElement('h4');
-        resultTitle.textContent = 'Result:';
+        resultTitle.textContent = '结果:';
         toolDiv.appendChild(resultTitle);
         const resultPre = document.createElement('pre');
         try {
-            // Pretty-print the JSON result if possible
             resultPre.textContent = JSON.stringify(JSON.parse(toolCall.toolResult), null, 2);
         } catch (e) {
-            resultPre.textContent = toolCall.toolResult; // Fallback for non-JSON result
+            resultPre.textContent = toolCall.toolResult;
         }
         toolDiv.appendChild(resultPre);
 
         chatWindow.appendChild(toolDiv);
     };
 
+
     const updateUiState = (state) => {
+        // ... [更新流程状态和 Persona 的代码不变] ...
         processStatusList.innerHTML = '';
         if (state.processStatus) {
             for (const [process, status] of Object.entries(state.processStatus)) {
@@ -101,11 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 processStatusList.appendChild(li);
             }
         }
-
         personaDisplay.textContent = state.persona || '';
+
+        // 更新配置面板
         if (state.rawPersonaTemplate) { personaTemplateInput.value = state.rawPersonaTemplate; }
         if (state.openingMonologue !== null) { openingMonologueInput.value = state.openingMonologue; }
         if (state.modelName) { modelNameInput.value = state.modelName; }
+
+        // 更新滑动条
         if (state.temperature !== undefined) {
             temperatureInput.value = state.temperature;
             temperatureValue.textContent = state.temperature.toFixed(1);
@@ -114,13 +129,30 @@ document.addEventListener('DOMContentLoaded', () => {
             topPInput.value = state.topP;
             topPValue.textContent = state.topP.toFixed(1);
         }
+        if (state.repetitionPenalty !== undefined && state.repetitionPenalty !== null) {
+            repetitionPenaltyInput.value = state.repetitionPenalty;
+            repetitionPenaltyValue.textContent = state.repetitionPenalty.toFixed(1);
+        }
+        if (state.presencePenalty !== undefined && state.presencePenalty !== null) {
+            presencePenaltyInput.value = state.presencePenalty;
+            presencePenaltyValue.textContent = state.presencePenalty.toFixed(1);
+        }
+        if (state.frequencyPenalty !== undefined && state.frequencyPenalty !== null) {
+            frequencyPenaltyInput.value = state.frequencyPenalty;
+            frequencyPenaltyValue.textContent = state.frequencyPenalty.toFixed(1);
+        }
+
+        // 更新 Max Tokens
+        maxTokensInput.value = state.maxTokens !== undefined && state.maxTokens !== null ? state.maxTokens : '';
+
+        // [已移除] 更新 stop, seed, stream, enableSearch, enableThinking 的代码
     };
 
+    // [ sendMessage 函数保持不变 ]
     const sendMessage = async () => {
         const message = userInput.value;
         const trimmedMessage = message.trim();
 
-        // 确保能发送单个空格，但阻止其他无效输入
         if (trimmedMessage.length === 0 && message !== ' ') {
             userInput.value = '';
             return;
@@ -142,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
-            // ** NEW: Check for and display tool call information **
             if (data.toolCall) {
                 addToolCallToChat(data.toolCall);
             }
@@ -158,15 +189,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+
     const saveConfiguration = async () => {
+        // ... [获取工作流配置的代码不变] ...
         const processes = processesInput.value.trim().split('\n').map(p => p.trim()).filter(Boolean);
         const dependencies = dependenciesInput.value.trim();
         const personaTemplate = personaTemplateInput.value.trim();
         const openingMonologue = openingMonologueInput.value.trim();
         const modelName = modelNameInput.value.trim();
+
+        // 获取模型参数
         const temperature = parseFloat(temperatureInput.value);
         const topP = parseFloat(topPInput.value);
+        const maxTokens = maxTokensInput.value ? parseInt(maxTokensInput.value, 10) : null;
+        const repetitionPenalty = parseFloat(repetitionPenaltyInput.value);
+        const presencePenalty = parseFloat(presencePenaltyInput.value);
+        const frequencyPenalty = parseFloat(frequencyPenaltyInput.value);
 
+        // [已移除] 获取 stop, stream, seed, enableSearch, enableThinking 值的代码
+
+        // ... [验证代码不变] ...
         if (processes.length === 0) {
             alert('流程步骤不能为空！');
             return;
@@ -183,7 +225,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     processes, dependencies, personaTemplate, openingMonologue,
-                    modelName, temperature, topP
+                    modelName, temperature, topP, maxTokens, repetitionPenalty,
+                    presencePenalty, frequencyPenalty
+                    // [已移除] stop, stream, seed, enableSearch, enableThinking 字段
                 })
             });
             if (!response.ok) {
@@ -207,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // [ resetConversation 和 saveOnExit 函数保持不变 ]
     const resetConversation = async () => {
         if (!chatActivity) {
             alert("没有对话记录，无需重置。");
@@ -254,15 +299,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    if(temperatureInput) {
-        temperatureInput.addEventListener('input', () => {
-            temperatureValue.textContent = parseFloat(temperatureInput.value).toFixed(1);
-        });
-    }
-    if(topPInput) {
-        topPInput.addEventListener('input', () => {
-            topPValue.textContent = parseFloat(topPInput.value).toFixed(1);
-        });
-    }
+
+    // 绑定滑动条事件
+    const setupSlider = (slider, display) => {
+        if (slider && display) {
+            slider.addEventListener('input', () => {
+                display.textContent = parseFloat(slider.value).toFixed(1);
+            });
+        }
+    };
+
+    setupSlider(temperatureInput, temperatureValue);
+    setupSlider(topPInput, topPValue);
+    setupSlider(repetitionPenaltyInput, repetitionPenaltyValue);
+    setupSlider(presencePenaltyInput, presencePenaltyValue);
+    setupSlider(frequencyPenaltyInput, frequencyPenaltyValue);
+
     window.addEventListener('beforeunload', saveOnExit);
 });

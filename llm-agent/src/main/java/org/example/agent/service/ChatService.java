@@ -14,7 +14,6 @@ import org.example.llm.dto.llm.LlmMessage;
 import org.example.llm.dto.llm.LlmResponse;
 import org.example.llm.dto.llm.LlmToolCall;
 import org.example.llm.dto.tool.ToolDefinition;
-
 import org.example.llm.service.LlmService;
 import org.example.llm.service.LlmServiceManager;
 import org.slf4j.Logger;
@@ -27,7 +26,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @SessionScope
@@ -163,8 +161,8 @@ public class ChatService {
         switch (toolName) {
             case "compareTwoPlans":
                 return toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText());
-                case "queryMcpFaq":
-                    return toolService.queryMcpFaq(args.get("intent").asText());
+//                case "queryMcpFaq":
+//                    return toolService.queryMcpFaq(args.get("intent").asText());
             default:
                 return "{\"error\": \"未知工具\"}";
         }
@@ -207,11 +205,23 @@ public class ChatService {
         return processNames.stream().map(this::sanitizeProcessName).collect(Collectors.toList());
     }
 
+
     public UiState getCurrentUiState() {
         Map<String, String> statuses = processManager.getAllProcesses().stream()
                 .collect(Collectors.toMap(p -> p, p -> processManager.getUnfinishedProcesses().contains(p) ? "PENDING" : "COMPLETED", (v1, v2) -> v1, LinkedHashMap::new));
-        return new UiState(statuses, buildDynamicPersona(), workflowStateService.getPersonaTemplate(), workflowStateService.getOpeningMonologue(),
-                modelConfigurationService.getModelName(), modelConfigurationService.getTemperature(), modelConfigurationService.getTopP());
+
+        return new UiState(statuses,
+                buildDynamicPersona(),
+                workflowStateService.getPersonaTemplate(),
+                workflowStateService.getOpeningMonologue(),
+                modelConfigurationService.getModelName(),
+                modelConfigurationService.getTemperature(),
+                modelConfigurationService.getTopP(),
+                modelConfigurationService.getMaxTokens(),
+                modelConfigurationService.getRepetitionPenalty(),
+                modelConfigurationService.getPresencePenalty(),
+                modelConfigurationService.getFrequencyPenalty()
+        );
     }
 
     public void resetProcessesAndSaveHistory() {
@@ -226,8 +236,6 @@ public class ChatService {
 
     private void saveHistory(List<LlmMessage> history) {
         if (history != null && !history.isEmpty()) {
-            // 注意：HistoryService 还没有适配 LlmMessage，所以这里暂时是注释掉的状态
-            // 你可以后续修改 HistoryService 来接收 List<LlmMessage>
             // historyService.saveConversationToFile("", history);
         }
     }
@@ -236,12 +244,20 @@ public class ChatService {
         saveHistoryOnExit();
         workflowStateService.updateWorkflow(config.getProcesses(), config.getPersonaTemplate(), config.getDependencies(), config.getOpeningMonologue());
         processManager.updateProcesses(config.getProcesses());
+
+        // 更新模型配置
         modelConfigurationService.updateModelName(config.getModelName());
         modelConfigurationService.updateTemperature(config.getTemperature());
         modelConfigurationService.updateTopP(config.getTopP());
+        modelConfigurationService.updateMaxTokens(config.getMaxTokens());
+        modelConfigurationService.updateRepetitionPenalty(config.getRepetitionPenalty());
+        modelConfigurationService.updatePresencePenalty(config.getPresencePenalty());
+        modelConfigurationService.updateFrequencyPenalty(config.getFrequencyPenalty());
+
         getLlmService().popConversationHistory(getSessionId());
         this.silentCount = 0;
     }
 
-    public static record ChatCompletion(String reply, ToolCallInfo toolCallInfo) {}
+    public static record ChatCompletion(String reply, ToolCallInfo toolCallInfo) {
+    }
 }

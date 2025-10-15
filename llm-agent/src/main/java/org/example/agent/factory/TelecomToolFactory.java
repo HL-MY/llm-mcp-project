@@ -92,8 +92,8 @@ public class TelecomToolFactory {
      */
     public static List<ToolDefinition> getAllToolDefinitions() {
         return List.of(
-                createCompareTwoPlansTool(),
-                createQueryMcpFaqTool()
+                createCompareTwoPlansTool()
+//                , createQueryMcpFaqTool()
         );
     }
 }
