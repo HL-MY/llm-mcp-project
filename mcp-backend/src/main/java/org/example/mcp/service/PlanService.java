@@ -39,10 +39,6 @@ public class PlanService {
         }
     }
 
-    public Set<String> getAllPlanNames() {
-        return planData.keySet();
-    }
-
     public Map<String, Plan> compareTwoPlans(String planName1, String planName2) {
         Map<String, Plan> result = new HashMap<>();
         Plan p1 = planData.get(planName1);
@@ -60,15 +56,4 @@ public class PlanService {
         return result;
     }
 
-    public Plan getPlanByName(String planName) {
-        if (planName == null) {
-            log.warn("查询套餐详情时收到的套餐名为空");
-            return null;
-        }
-        Plan plan = planData.get(planName);
-        if (plan == null) {
-            log.warn("查询套餐详情时未找到: {}", planName);
-        }
-        return plan;
-    }
 }

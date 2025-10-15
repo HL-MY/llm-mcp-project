@@ -65,11 +65,19 @@ public class QianwenServiceImpl {
             GenerationResult result = new Generation().call(paramBuilder.build());
             log.info("调用阿里大模型成功, RequestId: {}", result.getRequestId());
 
+            // 总是先将用户的消息添加到历史记录
             history.add(userMessage);
+
             Message assistantMessage = result.getOutput().getChoices().get(0).getMessage();
+
+            // =========================【核心修改点 1】=========================
+            // 移除了之前的if判断。
+            // 无论模型的回复是普通文本还是工具调用请求(tool_calls)，都必须将其完整地添加到历史记录中。
+            // 这是保证对话上下文连续性的关键，也是修复问题的根本。
             if (assistantMessage != null) {
                 history.add(assistantMessage);
             }
+            // =========================【修改结束】=========================
 
             return result;
 
@@ -82,12 +90,16 @@ public class QianwenServiceImpl {
         }
     }
 
+    // =========================【核心修改点 2】=========================
     public GenerationResult callWithToolResult(String sessionId, String modelName, Map<String, Object> parameters,
-                                               List<ToolBase> tools, Message toolCallMessage, Message toolResultMessage) {
+                                               List<ToolBase> tools, Message toolResultMessage) {
 
         List<Message> history = conversationHistory.computeIfAbsent(sessionId, k -> new ArrayList<>());
+
+        // 将工具执行的结果消息添加到历史记录中。
         history.add(toolResultMessage);
 
+        // 从完整的 history 构建用于 API 调用的消息列表
         List<Message> messagesForApiCall = new ArrayList<>(history);
         handleSpecialModelParameters(modelName, parameters);
 
@@ -104,6 +116,7 @@ public class QianwenServiceImpl {
             GenerationResult result = new Generation().call(param);
             log.info("携带工具结果调用大模型成功, RequestId: {}", result.getRequestId());
 
+            // 将模型根据工具结果生成的最终回复，也添加到历史记录中
             Message finalAssistantMessage = result.getOutput().getChoices().get(0).getMessage();
             if (finalAssistantMessage != null) {
                 history.add(finalAssistantMessage);

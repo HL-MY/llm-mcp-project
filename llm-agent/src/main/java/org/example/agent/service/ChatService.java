@@ -65,10 +65,10 @@ public class ChatService {
         this.toolService = toolService;
     }
 
-    @PostConstruct
-    public void initTools() {
-        this.tools = new ArrayList<>(TelecomToolFactory.getAllToolDefinitions());
-    }
+//    @PostConstruct
+//    public void initTools() {
+//        this.tools = new ArrayList<>(TelecomToolFactory.getAllToolDefinitions());
+//    }
 
     private String getSessionId() {
         return httpSession.getId();
@@ -186,7 +186,7 @@ public class ChatService {
                 .build();
 
         GenerationResult finalResult = qianwenService.callWithToolResult(
-                getSessionId(), modelName, parameters, sdkTools, toolCallMessage, toolResultMessage);
+                getSessionId(), modelName, parameters, sdkTools, toolResultMessage);
 
         String finalReply = finalResult.getOutput().getChoices().get(0).getMessage().getContent();
         return new ChatCompletion(finalReply, toolCallInfo);
@@ -248,14 +248,13 @@ public class ChatService {
 
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
-            case "queryAllPlans": return toolService.queryAllPlans();
-            case "compareTwoPlans":
-                String plan1 = args.get("planName1").asText();
-                String plan2 = args.get("planName2").asText();
-                return toolService.compareTwoPlans(plan1, plan2);
-            case "getPlanDetails":
-                String planName = args.get("planName").asText();
-                return toolService.getPlanDetails(planName);
+//            case "compareTwoPlans":
+//                String plan1 = args.get("planName1").asText();
+//                String plan2 = args.get("planName2").asText();
+//                return toolService.compareTwoPlans(plan1, plan2);
+//            case "queryMcpFaq":
+//                String intent = args.get("intent").asText();
+//                return toolService.queryMcpFaq(intent);
             default:
                 log.warn("尝试调用一个未知的工具: {}", toolName);
                 return "{\"error\": \"未知工具\"}";
