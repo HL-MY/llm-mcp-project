@@ -60,11 +60,16 @@ public class TelecomToolFactory {
      * 新增：创建 "查询套餐常见问题 (FAQ)" 工具的定义。
      * @return ToolDefinition
      */
+    /**
+     * 新增：创建 "查询套餐常见问题 (FAQ)" 工具的定义。
+     * @return ToolDefinition
+     */
     public static ToolDefinition createQueryMcpFaqTool() {
         Map<String, ParameterProperty> properties = Map.of(
                 "intent", ParameterProperty.builder()
                         .type("string")
-                        .description("用户问题的核心意图，必须是 '优惠到期的月租', '合约期多久', '怎么取消套餐', '违约金多少', '恢复原套餐', '流量结转', '生效时间', '去店里办', '怎么扣费', '充值渠道', '其他套餐', '4G网还是5G', '流量是通用还是定向', '接电话费用', '打电话费用', '办副卡', '宽带业务', '改套餐', '10块钱话费是什么', '要换号码吗' 中的一个。").build()
+                        //.description("用户问题的核心意图，必须是 '优惠到期的月租', '合约期多久', '怎么取消套餐', '违约金多少', '恢复原套餐', '流量结转', '生效时间', '去店里办', '怎么扣费', '充值渠道', '其他套餐', '4G网还是5G', '流量是通用还是定向', '接电话费用', '打电话费用', '办副卡', '宽带业务', '改套餐', '10块钱话费是什么', '要换号码吗' 中的一个。")
+                        .build()
         );
 
         ParameterSchema parameters = ParameterSchema.builder()
@@ -75,7 +80,9 @@ public class TelecomToolFactory {
 
         FunctionDefinition function = FunctionDefinition.builder()
                 .name("queryMcpFaq")
-                .description("【必须调用】当客户询问关于套餐的常见问题时（例如合约期、违-约金、生效时间、如何取消、扣费方式、能否办理宽带、能否去店里办等），必须调用此工具来获取唯一准确的官方回答。")
+                .description("【该工具是移动手机卡套餐知识库，包含用户常问的套餐问题、费用、升档信息、优惠期（合约期）、违约金等。" +
+                        "当用户提到套餐、月租、流量、升级、优惠期等关键词，务必调用本工具，用户的问题与工具内意图不完全一致时，请尝试语义匹配，不能仅依赖关键词。"
+                )
                 .parameters(parameters)
                 .build();
 
@@ -93,7 +100,7 @@ public class TelecomToolFactory {
     public static List<ToolDefinition> getAllToolDefinitions() {
         return List.of(
                 createCompareTwoPlansTool()
-//                , createQueryMcpFaqTool()
+                , createQueryMcpFaqTool()
         );
     }
 }

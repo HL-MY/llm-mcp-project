@@ -19,6 +19,9 @@ public class DoubaoMessage {
     private String role;
     private String content;
 
+    @JsonProperty("tool_call_id")
+    private String toolCallId;
+
     // 【新增】用于发送和接收工具调用信息
     @JsonProperty("tool_calls")
     private List<DoubaoApiResp.ToolCall> toolCalls;

@@ -17,7 +17,7 @@ public interface LlmService {
     LlmResponse chat(String sessionId, String userContent, String modelName, String persona,
                      String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools);
     LlmResponse chatWithToolResult(String sessionId, String modelName, Map<String, Object> parameters,
-                                   List<ToolDefinition> tools, LlmMessage toolCallMessages, LlmMessage toolResultMessages);
+                                   List<ToolDefinition> tools, LlmMessage toolResultMessage);
     List<LlmMessage> getConversationHistory(String sessionId);
     List<LlmMessage> popConversationHistory(String sessionId);
 }

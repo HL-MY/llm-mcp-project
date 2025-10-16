@@ -24,7 +24,7 @@ public class WorkflowStateService {
 
     private Map<String, List<String>> dependencyRules = new HashMap<>();
 
-    private String openingMonologue = "喂，您好，这边是中国移动流量卡渠道的营销员，请问是尾号3312的机主吗?我们针对您的套餐使用情况推出了59元的优惠套餐，我给您简单介绍下好吗?";
+    private String openingMonologue = "喂，您好，这边是中国移动的客服人员，请问是尾号6666的机主吗?咱们来电是针对您现在的套餐想给您推荐一个更划算的升级活动，我先给您简单介绍下您看可以吗?";
 
     public List<String> getCurrentProcesses() {
         return currentProcesses;

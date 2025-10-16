@@ -11,6 +11,7 @@ import lombok.Data;
 public class LlmMessage {
     private String role;
     private String content;
+    private String toolCallId;
 
     public static class Role {
         public static final String SYSTEM = "system";

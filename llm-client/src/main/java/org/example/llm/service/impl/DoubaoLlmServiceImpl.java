@@ -73,9 +73,9 @@ public class DoubaoLlmServiceImpl implements LlmService {
 
     @Override
     public LlmResponse chatWithToolResult(String sessionId, String modelName, Map<String, Object> parameters,
-                                          List<ToolDefinition> tools, LlmMessage toolCallMessage, LlmMessage toolResultMessage) {
+                                          List<ToolDefinition> tools, LlmMessage toolResultMessage) {
         List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new ArrayList<>());
-        history.add(toolResultMessage); // 将工具结果添加到历史记录
+        history.add(toolResultMessage); // 将包含 toolCallId 的工具结果添加到历史记录
 
         DoubaoApiReq request = buildDoubaoRequest(modelName, parameters, history, tools);
 
@@ -111,7 +111,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
         return messagesForApiCall;
     }
 
-    // --- buildDoubaoRequest 方法已更新 ---
     private DoubaoApiReq buildDoubaoRequest(String modelName, Map<String, Object> parameters, List<LlmMessage> messages, List<ToolDefinition> tools) {
         List<DoubaoMessage> apiMessages = messages.stream()
                 .map(this::convertLlmMessageToDoubaoMessage)
@@ -123,7 +122,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
                 .temperature((Double) parameters.get("temperature"))
                 .topP((Double) parameters.get("top_p"));
 
-        // 参数映射
         if (parameters.containsKey("max_tokens")) {
             requestBuilder.maxTokens((Integer) parameters.get("max_tokens"));
         }
@@ -133,7 +131,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
         if (parameters.containsKey("frequency_penalty")) {
             requestBuilder.frequencyPenalty((Double) parameters.get("frequency_penalty"));
         }
-        // [已移除] stop 和 stream 的处理逻辑
 
         if (!CollectionUtils.isEmpty(tools)) {
             requestBuilder.tools(tools);
@@ -142,7 +139,6 @@ public class DoubaoLlmServiceImpl implements LlmService {
         return requestBuilder.build();
     }
 
-    // ... [parseDoubaoResponse, convert...Message, get/pop ConversationHistory 等方法保持不变] ...
     private LlmResponse parseDoubaoResponse(DoubaoMessage doubaoMessage) {
         List<LlmToolCall> llmToolCalls = null;
         if (!CollectionUtils.isEmpty(doubaoMessage.getToolCalls())) {
@@ -185,7 +181,11 @@ public class DoubaoLlmServiceImpl implements LlmService {
             }
         }
         if (LlmMessage.Role.TOOL.equals(llmMessage.getRole())) {
-            return DoubaoMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
+            return DoubaoMessage.builder()
+                    .role(llmMessage.getRole())
+                    .content(llmMessage.getContent())
+                    .toolCallId(llmMessage.getToolCallId())
+                    .build();
         }
         return DoubaoMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
     }

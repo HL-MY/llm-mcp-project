@@ -129,16 +129,20 @@ public class ChatService {
         try {
             toolArgs = objectMapper.readTree(toolArgsString);
         } catch (JsonProcessingException e) {
+            log.error("模型返回的工具参数格式不正确", e);
             return new ChatCompletion("抱歉，模型返回的工具参数格式不正确。", null);
         }
 
         String toolResultContent = executeTool(toolName, toolArgs);
         ToolCallInfo toolCallInfo = new ToolCallInfo(toolName, toolArgsString, toolResultContent);
 
-        LlmMessage toolCallMessage = LlmMessage.builder().role(LlmMessage.Role.ASSISTANT).content(objectMapper.valueToTree(result.getToolCalls()).toString()).build();
-        LlmMessage toolResultMessage = LlmMessage.builder().role(LlmMessage.Role.TOOL).content(toolResultContent).build();
+        LlmMessage toolResultMessage = LlmMessage.builder()
+                .role(LlmMessage.Role.TOOL)
+                .content(toolResultContent)
+                .toolCallId(toolCall.getId())
+                .build();
 
-        LlmResponse finalResult = getLlmService().chatWithToolResult(getSessionId(), modelName, parameters, tools, toolCallMessage, toolResultMessage);
+        LlmResponse finalResult = getLlmService().chatWithToolResult(getSessionId(), modelName, parameters, tools, toolResultMessage);
         log.info("【LLM工具调用后原始响应】\n{}", finalResult.getContent());
         return new ChatCompletion(finalResult.getContent(), toolCallInfo);
     }
@@ -161,8 +165,8 @@ public class ChatService {
         switch (toolName) {
             case "compareTwoPlans":
                 return toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText());
-//                case "queryMcpFaq":
-//                    return toolService.queryMcpFaq(args.get("intent").asText());
+            case "queryMcpFaq":
+                return toolService.queryMcpFaq(args.get("intent").asText());
             default:
                 return "{\"error\": \"未知工具\"}";
         }
@@ -245,7 +249,6 @@ public class ChatService {
         workflowStateService.updateWorkflow(config.getProcesses(), config.getPersonaTemplate(), config.getDependencies(), config.getOpeningMonologue());
         processManager.updateProcesses(config.getProcesses());
 
-        // 更新模型配置
         modelConfigurationService.updateModelName(config.getModelName());
         modelConfigurationService.updateTemperature(config.getTemperature());
         modelConfigurationService.updateTopP(config.getTopP());
