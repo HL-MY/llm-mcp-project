@@ -73,9 +73,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const toolDiv = document.createElement('div');
         toolDiv.className = 'message tool-call-message';
 
-        const toolName = document.createElement('h3');
-        toolName.innerHTML = `🛠️ 工具调用: <code>${toolCall.toolName}</code>`;
-        toolDiv.appendChild(toolName);
+        const header = document.createElement('h3');
+        header.innerHTML = `🛠️ 工具调用: <code>${toolCall.toolName}</code>`;
+        toolDiv.appendChild(header);
+
+        // 新增：时间明细容器
+        const timeDetailsDiv = document.createElement('div');
+        timeDetailsDiv.className = 'tool-time-details';
+
+        const llm1 = toolCall.llmFirstCallTime || 0;
+        const toolTime = toolCall.toolExecutionTime || 0;
+        const llm2 = toolCall.llmSecondCallTime || 0;
+        const total = llm1 + toolTime + llm2;
+
+        timeDetailsDiv.innerHTML = `
+            <span class="time-label">LLM决策耗时:</span> <span class="time-value">${llm1} ms</span>
+            <span class="time-separator">+</span>
+            <span class="time-label">Tool执行耗时:</span> <span class="time-value">${toolTime} ms</span>
+            <span class="time-separator">+</span>
+            <span class="time-label">LLM总结耗时:</span> <span class="time-value">${llm2} ms</span>
+            <span class="time-separator">=</span>
+            <span class="time-label">Tool流程总耗时:</span> <span class="time-value total-time">${total} ms</span>
+        `;
+        toolDiv.appendChild(timeDetailsDiv);
+
 
         const argsTitle = document.createElement('h4');
         argsTitle.textContent = '参数:';

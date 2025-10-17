@@ -95,12 +95,18 @@ public class ChatService {
         var parameters = modelConfigurationService.getParametersAsMap();
         String openingMonologue = workflowStateService.getOpeningMonologue();
 
+        long llm1StartTime = System.currentTimeMillis();
         LlmResponse result = getLlmService().chat(getSessionId(), userMessage, modelName, persona, openingMonologue, parameters, tools);
+        long llm1EndTime = System.currentTimeMillis();
+        long llmFirstCallTime = llm1EndTime - llm1StartTime;
+        log.info("【LLM首次调用耗时】: {} 毫秒", llmFirstCallTime);
+
+
         log.info("【LLM原始响应】\n{}", result.getContent());
         String finalContent;
         ToolCallInfo toolCallInfo = null;
         if (result.hasToolCalls()) {
-            ChatCompletion toolCallCompletion = handleToolCalls(result, modelName, parameters, tools);
+            ChatCompletion toolCallCompletion = handleToolCalls(result, modelName, parameters, tools, llmFirstCallTime);
             finalContent = toolCallCompletion.reply();
             toolCallInfo = toolCallCompletion.toolCallInfo();
         } else {
@@ -119,7 +125,7 @@ public class ChatService {
         workflowStateService.getCurrentProcesses().forEach(processManager::completeProcess);
     }
 
-    private ChatCompletion handleToolCalls(LlmResponse result, String modelName, Map<String, Object> parameters, List<ToolDefinition> tools) {
+    private ChatCompletion handleToolCalls(LlmResponse result, String modelName, Map<String, Object> parameters, List<ToolDefinition> tools, long llmFirstCallTime) {
         LlmToolCall toolCall = result.getToolCalls().get(0);
         String toolName = toolCall.getToolName();
         String toolArgsString = toolCall.getArguments();
@@ -133,8 +139,12 @@ public class ChatService {
             return new ChatCompletion("抱歉，模型返回的工具参数格式不正确。", null);
         }
 
+        long toolStartTime = System.currentTimeMillis();
         String toolResultContent = executeTool(toolName, toolArgs);
-        ToolCallInfo toolCallInfo = new ToolCallInfo(toolName, toolArgsString, toolResultContent);
+        long toolEndTime = System.currentTimeMillis();
+        long toolExecutionTime = toolEndTime - toolStartTime;
+        log.info("【Tool 执行耗时】: {} 毫秒", toolExecutionTime);
+
 
         LlmMessage toolResultMessage = LlmMessage.builder()
                 .role(LlmMessage.Role.TOOL)
@@ -142,7 +152,14 @@ public class ChatService {
                 .toolCallId(toolCall.getId())
                 .build();
 
+        long llm2StartTime = System.currentTimeMillis();
         LlmResponse finalResult = getLlmService().chatWithToolResult(getSessionId(), modelName, parameters, tools, toolResultMessage);
+        long llm2EndTime = System.currentTimeMillis();
+        long llmSecondCallTime = llm2EndTime - llm2StartTime;
+        log.info("【LLM二次调用耗时】: {} 毫秒", llmSecondCallTime);
+
+        ToolCallInfo toolCallInfo = new ToolCallInfo(toolName, toolArgsString, toolResultContent, toolExecutionTime, llmFirstCallTime, llmSecondCallTime);
+
         log.info("【LLM工具调用后原始响应】\n{}", finalResult.getContent());
         return new ChatCompletion(finalResult.getContent(), toolCallInfo);
     }
