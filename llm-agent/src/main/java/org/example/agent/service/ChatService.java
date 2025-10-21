@@ -33,7 +33,6 @@ import java.util.stream.Collectors;
 @SessionScope
 public class ChatService {
 
-    // ... (fields remain the same)
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private final LlmServiceManager llmServiceManager;
     private final ProcessManager processManager;
@@ -82,55 +81,83 @@ public class ChatService {
     // --- 核心逻辑更新 ---
     public ChatCompletion processUserMessage(String userMessage) throws IOException {
         long startTime = System.currentTimeMillis();
-        String defaultPersona = buildDynamicPersona(false); // 先生成默认persona
 
-        if (" ".equals(userMessage)) {
-            // (静默处理逻辑 ... 保持不变, 但返回默认persona)
+        // 1. --- 核心逻辑：检测输入状态并构建人设 (新修改) ---
+        boolean isInterrupted = userMessage != null && userMessage.contains("打断");
+        boolean isSpaceMessage = " ".equals(userMessage);
+
+        String persona;
+        String personaForUiUpdate; // 用于手动回复时更新UI
+
+        // 状态 1: 打断 (Code 2)
+        // 用户说了"打断"，我们使用 Code 2 的人设更新UI，然后手动回复，不调用LLM
+        if (isInterrupted) {
+            log.info("检测到用户输入'打断'，执行手动回复，不调用LLM。");
+            personaForUiUpdate = buildDynamicPersona("2"); // 假设 buildDynamicPersona(String code) 存在
+            String manualReply = "您请说，";
+            return new ChatCompletion(manualReply, null, personaForUiUpdate);
+        }
+
+        // 状态 2: 空格 (Code 3) - [新修改：恢复沉默逻辑，不调用LLM]
+        // 用户发送了" "，我们使用 Code 3 的人设，不调用LLM，而是回复预设话术
+        // 状态 2: 空格 (Code 3) - [新修改：添加历史记录]
+        if (isSpaceMessage) {
+            log.info("检测到用户输入'空格'，使用 code=3 并执行手动回复，不调用LLM。");
+            personaForUiUpdate = buildDynamicPersona("3"); // 确保 buildDynamicPersona(String code) 存在
+
             silentCount++;
+            String manualReply;
+
             if (silentCount >= 4) {
                 forceCompleteAllProcesses();
                 silentCount = 0;
-                return new ChatCompletion("好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！", null, defaultPersona);
+                manualReply = "好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！";
             } else {
                 List<String> cannedResponses = Arrays.asList("喂，您好，能听到说话么？", "我这边是中国移动流量卡渠道商的，能听到说话么？", "喂？您好，这边听不到您的声音，是信号不好吗？");
-                return new ChatCompletion(cannedResponses.get(silentCount - 1), null, defaultPersona);
+                manualReply = cannedResponses.get(silentCount - 1);
             }
-        } else {
-            silentCount = 0;
+
+            // --- 【核心修改】 ---
+            // 1. 创建消息对象
+            LlmMessage userSpaceMessage = LlmMessage.builder()
+                    .role(LlmMessage.Role.USER)
+                    .content(userMessage) // userMessage 此时是 " "
+                    .build();
+            LlmMessage botSilentReply = LlmMessage.builder()
+                    .role(LlmMessage.Role.ASSISTANT)
+                    .content(manualReply)
+                    .build();
+
+            // 2. 调用 LlmService 将消息添加到上下文中
+            try {
+                getLlmService().addMessagesToHistory(getSessionId(), userSpaceMessage, botSilentReply);
+                log.info("已将'空格'和'沉默回复'添加到会话历史。");
+            } catch (Exception e) {
+                log.error("手动添加会话历史失败", e);
+            }
+
+            // 3. 返回手动回复
+            return new ChatCompletion(manualReply, null, personaForUiUpdate);
         }
 
+        // 2. --- 检查流程是否已完成 ---
+        // (此检查应在所有手动回复之后，LLM调用之前)
         if (getAvailableProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
+            // 使用一个默认的人设（比如code=1）来返回
+            String defaultPersona = buildDynamicPersona("1");
             return new ChatCompletion("🎉 恭喜！所有流程均已完成！", null, defaultPersona);
         }
 
-        // --- 核心逻辑：先检测用户输入，再构建人设 ---
-        // 1. 检测用户输入是否为“打断”
-        boolean isInterrupted = userMessage != null && userMessage.contains("打断");
+        // 3. --- 状态 3: 正常 (Code 1) ---
+        // 其他所有情况，重置 silentCount，使用 Code 1 的人设，正常调用LLM
+        log.info("检测到正常消息，重置 silentCount 并使用 code=1。");
+        persona = buildDynamicPersona("1"); // 假设 buildDynamicPersona(String code) 存在
 
-        // --- 变更：如果用户打断，则不调用LLM，直接返回 ---
-        if (isInterrupted) {
-            log.info("检测到用户输入'打断'，执行手动回复，不调用LLM。");
-
-            // 2a. 构建人设 (用于UI更新，code=2)
-            // 传入 true 来生成 "code=2" (打断状态) 的人设
-            String personaForUiUpdate = buildDynamicPersona(true);
-
-            // 2b. 手动回复
-            String manualReply = "您请说，";
-
-            // 2c. 返回 ChatCompletion，跳过 LLM 调用
-            // WebController 将使用 personaForUiUpdate 来更新UI
-            return new ChatCompletion(manualReply, null, personaForUiUpdate);
-        }
-        // --- 变更结束 ---
-
-
-        // 2. (若未打断) 根据检测结果，动态构建人设 (替换占位符)
-        // 'isInterrupted' 在这里一定是 false
-        String persona = buildDynamicPersona(isInterrupted);
         log.info("最终发送给LLM的人设:\n{}", persona);
+        // --- 逻辑结束 ---
 
-        // 3. (后续步骤) 拼接上下文并发送给大模型
+
+        // 4. (后续步骤) 拼接上下文并发送给大模型
         String modelName = modelConfigurationService.getModelName();
         var parameters = modelConfigurationService.getParametersAsMap();
         String openingMonologue = workflowStateService.getOpeningMonologue();
@@ -245,24 +272,21 @@ public class ChatService {
     }
 
     // --- 根据 isInterrupted 动态替换 {code} 为 "1" 或 "2" ---
-    private String buildDynamicPersona(boolean isInterrupted) {
+    private String buildDynamicPersona(String codeValue) {
         // 1. 获取包含 {code} 的原始模板
         String personaTemplate = workflowStateService.getPersonaTemplate();
 
-        // 2. 准备替换值
-        String codeValue;
-        if (isInterrupted) {
-            // 当用户说"打断"时，替换为 "2"
-            codeValue = "2";
-            log.info("动态替换人设: {{code}} -> 2 (打断)");
-
-        } else {
-            // 正常情况，替换为 "1"
-            codeValue = "1";
-            log.info("动态替换人设: {{code}} -> 1 (正常)");
+        // 2. 准备替换值并记录日志
+        String statusDesc;
+        switch (codeValue) {
+            case "1": statusDesc = "正常"; break;
+            case "2": statusDesc = "打断"; break;
+            case "3": statusDesc = "空格沉默"; break;
+            default: statusDesc = "未知(" + codeValue + ")"; break;
         }
+        log.info("动态替换人设: {{code}} -> {} (状态: {})", codeValue, statusDesc);
 
-        // 3. 执行替换
+        // 3. 执行替换 {code}
         String personaWithCode = personaTemplate.replace("{code}", codeValue);
 
         // 4. 替换其他占位符 ({tasks}, {workflow})
@@ -314,8 +338,8 @@ public class ChatService {
 
     // --- 新增：重载方法，用于 reset, configure, index 等场景 ---
     public UiState getCurrentUiState() {
-        // 默认生成非打断状态的预览人设
-        String previewPersona = buildDynamicPersona(false);
+        // 默认生成非打断状态(code=1)的预览人设
+        String previewPersona = buildDynamicPersona("1"); // <-- [修改]
         return getCurrentUiState(previewPersona);
     }
 
@@ -338,8 +362,6 @@ public class ChatService {
         );
     }
 
-
-    // (resetProcessesAndSaveHistory, saveHistoryOnExit, saveHistory, updateWorkflow ... 保持不变)
     public void resetProcessesAndSaveHistory() {
         saveHistory(getLlmService().popConversationHistory(getSessionId()));
         processManager.reset();

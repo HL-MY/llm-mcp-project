@@ -199,4 +199,17 @@ public class DoubaoLlmServiceImpl implements LlmService {
     public List<LlmMessage> popConversationHistory(String sessionId) {
         return conversationHistory.remove(sessionId);
     }
+
+    // 【新增】
+    @Override
+    public void addMessagesToHistory(String sessionId, LlmMessage userMessage, LlmMessage assistantMessage) {
+        // 使用 computeIfAbsent 确保 history 列表存在且可变
+        List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new java.util.ArrayList<>());
+        if (userMessage != null) {
+            history.add(userMessage);
+        }
+        if (assistantMessage != null) {
+            history.add(assistantMessage);
+        }
+    }
 }

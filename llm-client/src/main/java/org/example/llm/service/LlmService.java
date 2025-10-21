@@ -20,4 +20,12 @@ public interface LlmService {
                                    List<ToolDefinition> tools, LlmMessage toolResultMessage);
     List<LlmMessage> getConversationHistory(String sessionId);
     List<LlmMessage> popConversationHistory(String sessionId);
+    /**
+     * 【新增】允许 ChatService 手动将消息对添加到会话历史中，
+     * 用于处理不经过LLM调用的情况（例如 "空格" 导致的沉默回复）。
+     * @param sessionId 会话ID
+     * @param userMessage 用户的消息 (可为null)
+     * @param assistantMessage 机器人的回复 (可为null)
+     */
+    void addMessagesToHistory(String sessionId, LlmMessage userMessage, LlmMessage assistantMessage);
 }
