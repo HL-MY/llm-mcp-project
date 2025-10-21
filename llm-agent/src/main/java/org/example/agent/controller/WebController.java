@@ -28,7 +28,8 @@ public class WebController {
 
     @GetMapping("/")
     public String index(Model model) {
-        UiState initialState = chatService.getCurrentUiState();
+        // 初始加载，显示默认预览
+        UiState initialState = chatService.getCurrentUiState(); // <-- 调用无参数版本
         model.addAttribute("initialState", initialState);
         return "index";
     }
@@ -37,29 +38,39 @@ public class WebController {
     @ResponseBody
     public ResponseEntity<?> handleChat(@RequestBody ChatRequest chatRequest) {
         try {
+            // processUserMessage 内部会处理动态人设，并返回实际使用的 persona
             ChatCompletion completion = chatService.processUserMessage(chatRequest.getMessage());
-            UiState updatedState = chatService.getCurrentUiState();
-            // Create the final response, now including the tool call info
+
+            // --- 修正：使用 completion 返回的 personaUsed 来获取正确的 UiState ---
+            UiState updatedState = chatService.getCurrentUiState(completion.personaUsed()); // <-- 调用带参数版本
+
+
             ChatResponse response = new ChatResponse(completion.reply(), updatedState, completion.toolCallInfo());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("处理聊天请求时出错", e);
-            return ResponseEntity.status(500).body("处理您的请求时出错: " + e.getMessage());
+            // 在错误时也返回当前状态（默认预览）
+            UiState errorState = chatService.getCurrentUiState(); // <-- 调用无参数版本
+            ChatResponse errorResponse = new ChatResponse("处理您的请求时出错: " + e.getMessage(), errorState, null);
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
+
 
     @PostMapping("/api/reset")
     @ResponseBody
     public ResponseEntity<UiState> resetState() {
         chatService.resetProcessesAndSaveHistory();
-        return ResponseEntity.ok(chatService.getCurrentUiState());
+        // 重置后，显示默认预览
+        return ResponseEntity.ok(chatService.getCurrentUiState()); // <-- 调用无参数版本
     }
 
     @PostMapping("/api/configure")
     @ResponseBody
     public ResponseEntity<UiState> configureWorkflow(@RequestBody ConfigurationRequest config) {
         chatService.updateWorkflow(config);
-        return ResponseEntity.ok(chatService.getCurrentUiState());
+        // 配置更新后，显示默认预览
+        return ResponseEntity.ok(chatService.getCurrentUiState()); // <-- 调用无参数版本
     }
 
     @PostMapping("/api/save-on-exit")

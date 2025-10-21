@@ -7,13 +7,14 @@
 </head>
 <body>
 <div class="container">
-    <!-- ... [左侧预览面板和中间聊天面板代码保持不变] ... -->
     <div class="preview-pane">
         <div class="status-panel">
             <div class="panel-header">
                 <h2>流程状态</h2>
-                <button id="reset-btn" title="清空状态并自动保存本次对话记录">重置
-                    会话</button>
+                <div class="header-buttons">
+                    <button id="reset-btn" title="清空状态并自动保存本次对话记录">重置
+                        会话</button>
+                </div>
             </div>
             <ul id="process-status-list">
                 <li th:each="entry : ${initialState.processStatus}">

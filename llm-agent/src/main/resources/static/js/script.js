@@ -14,7 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const personaTemplateInput = document.getElementById('persona-template-input');
     const modelNameInput = document.getElementById('model-name-input');
 
-    // 滑动条
+    // --- 移除：删除了 codeBtn 和 codeStatusDisplay ---
+    // const codeBtn = document.getElementById('code-btn');
+    // const codeStatusDisplay = document.getElementById('code-status-display');
+
+    // (滑动条元素 ... 保持不变)
     const temperatureInput = document.getElementById('temperature-input');
     const temperatureValue = document.getElementById('temperature-value');
     const topPInput = document.getElementById('top-p-input');
@@ -25,18 +29,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const presencePenaltyValue = document.getElementById('presence-penalty-value');
     const frequencyPenaltyInput = document.getElementById('frequency-penalty-input');
     const frequencyPenaltyValue = document.getElementById('frequency-penalty-value');
-
-    // 其他参数
     const maxTokensInput = document.getElementById('max-tokens-input');
-
-    // [已移除] stopInput, streamInput, seedInput, enableSearchInput, enableThinkingInput 的元素获取
 
     let chatActivity = chatWindow.querySelector('.message') !== null;
     if (chatActivity) {
         systemPrompt.classList.add('hidden');
     }
 
-    // [ addMessageToChat 和 addToolCallToChat 函数保持不变 ]
+    // (addMessageToChat 和 addToolCallToChat ... 保持不变)
     const addMessageToChat = (sender, text) => {
         chatActivity = true;
         systemPrompt.classList.add('hidden');
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
+    // --- 修改：移除了 code 状态更新 ---
     const updateUiState = (state) => {
         // ... [更新流程状态和 Persona 的代码不变] ...
         processStatusList.innerHTML = '';
@@ -136,12 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         personaDisplay.textContent = state.persona || '';
 
-        // 更新配置面板
+        // --- 移除：删除了 code 状态显示 ---
+        // if (codeStatusDisplay) {
+        //    ...
+        // }
+
+        // (更新配置面板和滑动条 ... 保持不变)
         if (state.rawPersonaTemplate) { personaTemplateInput.value = state.rawPersonaTemplate; }
         if (state.openingMonologue !== null) { openingMonologueInput.value = state.openingMonologue; }
         if (state.modelName) { modelNameInput.value = state.modelName; }
-
-        // 更新滑动条
         if (state.temperature !== undefined) {
             temperatureInput.value = state.temperature;
             temperatureValue.textContent = state.temperature.toFixed(1);
@@ -162,14 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
             frequencyPenaltyInput.value = state.frequencyPenalty;
             frequencyPenaltyValue.textContent = state.frequencyPenalty.toFixed(1);
         }
-
-        // 更新 Max Tokens
         maxTokensInput.value = state.maxTokens !== undefined && state.maxTokens !== null ? state.maxTokens : '';
-
-        // [已移除] 更新 stop, seed, stream, enableSearch, enableThinking 的代码
     };
 
-    // [ sendMessage 函数保持不变 ]
+    // (sendMessage ... 保持不变)
     const sendMessage = async () => {
         const message = userInput.value;
         const trimmedMessage = message.trim();
@@ -210,7 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- 移除：删除了 sendCodeUpdate 函数 ---
 
+    // --- 修改：更新了占位符检查 ---
     const saveConfiguration = async () => {
         // ... [获取工作流配置的代码不变] ...
         const processes = processesInput.value.trim().split('\n').map(p => p.trim()).filter(Boolean);
@@ -219,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const openingMonologue = openingMonologueInput.value.trim();
         const modelName = modelNameInput.value.trim();
 
-        // 获取模型参数
+        // (获取模型参数 ... 保持不变)
         const temperature = parseFloat(temperatureInput.value);
         const topP = parseFloat(topPInput.value);
         const maxTokens = maxTokensInput.value ? parseInt(maxTokensInput.value, 10) : null;
@@ -227,15 +229,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const presencePenalty = parseFloat(presencePenaltyInput.value);
         const frequencyPenalty = parseFloat(frequencyPenaltyInput.value);
 
-        // [已移除] 获取 stop, stream, seed, enableSearch, enableThinking 值的代码
-
-        // ... [验证代码不变] ...
         if (processes.length === 0) {
             alert('流程步骤不能为空！');
             return;
         }
-        if (!personaTemplate.includes('{tasks}')) {
-            if (!confirm('警告：人设模板中似乎没有包含 {tasks} 占位符。这可能会影响流程推进，要继续吗？')) {
+        // --- 修改：移除了 {code} 检查 ---
+        if (!personaTemplate.includes('{tasks}') || !personaTemplate.includes('{workflow}')) {
+            if (!confirm('警告：人设模板中似乎没有包含 {tasks} 或 {workflow} 占位符。这可能会影响流程推进，要继续吗？')) {
                 return;
             }
         }
@@ -248,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     processes, dependencies, personaTemplate, openingMonologue,
                     modelName, temperature, topP, maxTokens, repetitionPenalty,
                     presencePenalty, frequencyPenalty
-                    // [已移除] stop, stream, seed, enableSearch, enableThinking 字段
                 })
             });
             if (!response.ok) {
@@ -272,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // [ resetConversation 和 saveOnExit 函数保持不变 ]
+    // (resetConversation 和 saveOnExit ... 保持不变)
     const resetConversation = async () => {
         if (!chatActivity) {
             alert("没有对话记录，无需重置。");
@@ -308,10 +307,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // 绑定事件
+    // --- 修改：移除了 codeBtn 的事件监听 ---
     if(sendBtn) sendBtn.addEventListener('click', sendMessage);
     if(resetBtn) resetBtn.addEventListener('click', resetConversation);
     if(saveConfigBtn) saveConfigBtn.addEventListener('click', saveConfiguration);
+    // if(codeBtn) ... // <-- 已移除
     if(userInput) {
         userInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
