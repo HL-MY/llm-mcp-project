@@ -326,16 +326,22 @@ public class ChatService {
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
             case "compareTwoPlans":
-                // 【修改】ToolService 返回 Map<String, Plan>，我们用 ObjectMapper 序列化
+                // 【修改】ToolService 已经返回了 String，我们不再需要
+                // objectMapper.writeValueAsString() 来二次序列化
                 try {
-                    // PlanService.compareTwoPlans 返回的是 Map<String, Plan>
-                    // Plan 实体中的 detailsJson 字段(Map<String,Object>) 会被 Jackson 自动序列化
-                    return objectMapper.writeValueAsString(toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText()));
-                } catch (JsonProcessingException e) {
+                    // 【旧代码 - 错误】
+                    // return objectMapper.writeValueAsString(toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText()));
+
+                    // 【新代码 - 正确】
+                    // 直接返回 ToolService 的结果
+                    return toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText());
+
+                } catch (/* JsonProcessingException */ Exception e) { // 异常类型可能需要改一下，或者保持 Exception
                     log.error("序列化 PlanService 结果失败", e);
                     return "{\"error\": \"无法序列化套餐对比结果\"}";
                 }
             case "queryMcpFaq":
+                // （这部分你写的是对的，保持不变）
                 return toolService.queryMcpFaq(args.get("intent").asText());
             default:
                 return "{\"error\": \"未知工具\"}";

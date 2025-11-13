@@ -1,5 +1,6 @@
 package org.example.agent;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -10,6 +11,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @EnableFeignClients(basePackages = "org.example.llm.client")
 @SpringBootApplication(scanBasePackages = "org.example")
+@MapperScan(basePackages = {"org.example.agent.db.mapper", "org.example.mcp.db.mapper"})
 public class LLMAgentApplication {
     public static void main(String[] args) {
         SpringApplication.run(LLMAgentApplication.class, args);

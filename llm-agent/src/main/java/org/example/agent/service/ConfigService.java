@@ -169,7 +169,7 @@ public class ConfigService {
     }
 
     public String getPreProcessingPrompt() {
-        return getGlobalSetting(KEY_PRE_PROMPT, "分析：{ \"intent\": \"意图不明\", \"emotion\": \"中性\" }");
+        return getGlobalSetting(KEY_PRE_PROMPT, "分析：{ \"intent\": \"意图不明\", \"emotion\": \"中性\", \"is_sensitive\": \"false\" }");
     }
 
     public String getFallbackResponse() {
