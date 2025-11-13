@@ -2,7 +2,7 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>LLM 流程编排器</title>
+    <title>LLM 流程编排器 (V3.0 - 数据库持久化)</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
             <div class="panel-header">
                 <h2>流程状态</h2>
                 <div class="header-buttons">
-                    <button id="reset-btn" title="清空状态并自动保存本次对话记录">重置
+                    <button id="reset-btn" title="清空会话并重置流程">重置
                         会话</button>
                 </div>
             </div>
@@ -31,7 +31,7 @@
 
     <div class="chat-pane">
         <div id="system-prompt" class="system-prompt-container">
-            <p>配置已加载，可以开始对话了。</p>
+            <p>配置已从数据库加载，可以开始对话了。</p>
         </div>
         <div class="chat-window" id="chat-window">
             <div class="message bot-message"
@@ -47,48 +47,88 @@
 
     <div class="config-pane">
         <div class="config-panel">
-            <h2>工作流配置</h2>
-            <label for="processes-input">流程步骤 (每行一个, *结尾代表可重复)</label>
-            <textarea id="processes-input" rows="5">1. 产品介绍*&#13;&#10;2. 升级确认*&#13;&#10;3. 升级提醒*&#13;&#10;4. 升级成功通知*&#13;&#10;5. 结束语*</textarea>
-            <label for="dependencies-input"> 依赖规则 (例如: "4 -> 3") </label>
-            <textarea id="dependencies-input" rows="3">2 -> 1&#13;&#10;3 -> 2&#13;&#10;4 -> 3&#13;&#10;5 -> 4</textarea>
-            <label for="opening-monologue-input">模型开场白</label>
-            <textarea id="opening-monologue-input" rows="3" th:text="${initialState.getOpeningMonologue()}"></textarea>
-            <label for="persona-template-input">人设模板 (使用 {tasks} 和 {workflow} 占位)</label>
-            <textarea id="persona-template-input" rows="10" th:text="${initialState.getRawPersonaTemplate()}"></textarea>
 
-            <h2 class="section-header">模型配置</h2>
-            <label for="model-name-input">模型名称</label>
-            <input type="text" id="model-name-input" th:value="${initialState.getModelName()}">
-
-            <div class="slider-container">
-                <label for="temperature-input">温度 (Temperature): <span id="temperature-value" th:text="${#numbers.formatDecimal(initialState.getTemperature(), 1, 1)}"></span></label>
-                <input type="range" id="temperature-input" min="0" max="2" step="0.1" th:value="${initialState.getTemperature()}">
+            <div class="tab-container">
+                <button class="tab-button active" data-tab="workflow-tab">工作流</button>
+                <button class="tab-button" data-tab="models-tab">模型</button>
+                <button class="tab-button" data-tab="strategies-tab">策略</button>
             </div>
 
-            <div class="slider-container">
-                <label for="top-p-input">(Top P): <span id="top-p-value" th:text="${#numbers.formatDecimal(initialState.getTopP(), 1, 1)}"></span></label>
-                <input type="range" id="top-p-input" min="0.1" max="1" step="0.1" th:value="${initialState.getTopP()}">
+            <div id="workflow-tab" class="tab-content active">
+                <label for="processes-input">流程步骤 (每行一个, *结尾代表可重复)</label>
+                <textarea id="processes-input" rows="5"></textarea>
+
+                <label for="dependencies-input"> 依赖规则 (例如: "2 -> 1") </label>
+                <textarea id="dependencies-input" rows="3"></textarea>
+
+                <label for="opening-monologue-input">模型开场白</label>
+                <textarea id="opening-monologue-input" rows="3"></textarea>
+
+                <label for="persona-template-input">主模型人设 (使用 {tasks}, {workflow}, {code})</label>
+                <textarea id="persona-template-input" rows="10"></textarea>
+
+                <button id="save-workflow-btn" class="add-strategy-btn" style="width: 100%; margin-top: 15px;">保存工作流配置 (实时生效)</button>
             </div>
 
-            <div class="slider-container">
-                <label for="repetition-penalty-input">重复惩罚(RepetitionPenalty): <span id="repetition-penalty-value">1.0</span></label>
-                <input type="range" id="repetition-penalty-input" min="0" max="2" step="0.1" value="1.0">
+            <div id="models-tab" class="tab-content">
+                <div class="model-config-section" id="main-model-config">
+                    <h3>主模型 (Main Model)</h3>
+                    <label for="main-model-name-input">模型名称</label>
+                    <input type="text" id="main-model-name-input">
+                    <div class="slider-container">
+                        <label>温度: <span id="main-temperature-value">0.7</span></label>
+                        <input type="range" id="main-temperature-input" min="0" max="2" step="0.1" value="0.7">
+                    </div>
+                    <div class="slider-container">
+                        <label>Top P: <span id="main-top-p-value">0.8</span></label>
+                        <input type="range" id="main-top-p-input" min="0.1" max="1" step="0.1" value="0.8">
+                    </div>
+                    <label for="main-max-tokens-input" style="margin-top: 15px;">最大Token</label>
+                    <input type="number" id="main-max-tokens-input" placeholder="例如: 2048">
+                    <button id="save-main-model-btn" class="add-strategy-btn">保存主模型配置 (实时生效)</button>
+                </div>
+
+                <div class="model-config-section" id="pre-model-config">
+                    <h3>预处理模型 (Pre-processing Model)</h3>
+                    <label for="pre-model-name-input">模型名称</label>
+                    <input type="text" id="pre-model-name-input">
+                    <div class="slider-container">
+                        <label>温度: <span id="pre-temperature-value">0.1</span></label>
+                        <input type="range" id="pre-temperature-input" min="0" max="2" step="0.1" value="0.1">
+                    </div>
+                    <div class="slider-container">
+                        <label>Top P: <span id="pre-top-p-value">0.7</span></label>
+                        <input type="range" id="pre-top-p-input" min="0.1" max="1" step="0.1" value="0.7">
+                    </div>
+                    <label for="pre-max-tokens-input" style="margin-top: 15px;">最大Token</label>
+                    <input type="number" id="pre-max-tokens-input" placeholder="例如: 512">
+                    <button id="save-pre-model-btn" class="add-strategy-btn">保存预处理模型 (实时生效)</button>
+                </div>
             </div>
 
-            <div class="slider-container">
-                <label for="presence-penalty-input">存在惩罚(PresencePenalty): <span id="presence-penalty-value">0.0</span></label>
-                <input type="range" id="presence-penalty-input" min="-2" max="2" step="0.1" value="0.0">
+            <div id="strategies-tab" class="tab-content">
+                <label for="pre-processing-prompt-input">预处理Prompt (小模型人设)</label>
+                <textarea id="pre-processing-prompt-input" rows="8"></textarea>
+                <button id="save-pre-prompt-btn" class="add-strategy-btn">保存Prompt (实时生效)</button>
+
+                <h2 class="section-header">意图策略库</h2>
+                <div id="intent-strategy-list" class="strategy-list">
+                </div>
+                <button id="add-intent-strategy-btn" class="add-strategy-btn">+ 添加新意图策略</button>
+
+                <h2 class="section-header">情绪策略库</h2>
+                <div id="emotion-strategy-list" class="strategy-list">
+                </div>
+                <button id="add-emotion-strategy-btn" class="add-strategy-btn">+ 添加新情绪策略</button>
+
+                <h2 class="section-header">兜底回复</h2>
+                <label for="fallback-response-input">意图为 "意图不明" 时</label>
+                <input type="text" id="fallback-response-input">
+                <label for="sensitive-response-input">检测到敏感词时</label>
+                <input type="text" id="sensitive-response-input">
+                <button id="save-fallback-btn" class="add-strategy-btn" style="width: 100%; margin-top: 15px;">保存兜底回复 (实时生效)</button>
             </div>
 
-            <div class="slider-container">
-                <label for="frequency-penalty-input">频率惩罚(FrequencyPenalty): <span id="frequency-penalty-value">0.0</span></label>
-                <input type="range" id="frequency-penalty-input" min="-2" max="2" step="0.1" value="0.0">
-            </div>
-
-            <label for="max-tokens-input">最大生成字数 (MaxTokens)</label>
-            <input type="number" id="max-tokens-input" placeholder="例如: 2048">
-            <button id="save-config-btn">应用配置并清空对话</button>
         </div>
     </div>
 </div>

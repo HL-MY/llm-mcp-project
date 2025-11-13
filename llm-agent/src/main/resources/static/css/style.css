@@ -1,182 +1,142 @@
-/* --- 基础和全局样式 --- */
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f7f9; margin: 0; display: flex; justify-content: center;
-    align-items: center; height: 100vh; overflow: hidden;
-}
-h2 { font-size: 16px; color: #333; margin-top: 0; }
-/* --- 主容器 --- */
-.container {
-    display: flex; width: 95vw; max-width: 1600px; height: 90vh;
-    background-color: #fff; border-radius: 12px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1); overflow: hidden;
-}
-/* --- 三个主栏 --- */
-.preview-pane, .config-pane {
-    flex: 0 0 320px; background-color: #f8f9fa; padding: 20px;
-    display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
-}
-.chat-pane {
-    flex: 1 1 auto; display: flex; flex-direction: column;
-    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-}
-/* --- 侧边栏面板 --- */
-.status-panel, .persona-panel, .config-panel {
-    background-color: #ffffff; border-radius: 8px; padding: 15px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-.panel-header {
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;
-}
-.panel-header h2 { margin: 0; padding: 0; border: none; }
-/* --- 状态列表 --- */
-#process-status-list { list-style: none; padding: 0; margin: 0; }
-#process-status-list li {
-    display: flex; align-items: center; margin-bottom: 8px;
-    font-size: 14px; color: #555;
-}
-.status-completed, .status-pending {
-    width: 12px; height: 12px; border-radius: 50%;
-    margin-right: 10px; flex-shrink: 0;
-}
-.status-completed { background-color: #28a745; }
-.status-pending { background-color: #ffc107; }
-/* --- 人设预览 --- */
-.persona-panel p { font-size: 13px; line-height: 1.6; color: #666; word-wrap: break-word; }
-/* --- 配置面板 --- */
-.config-panel label {
-    display: block; font-size: 13px; font-weight: bold;
-    color: #333; margin-top: 10px; margin-bottom: 5px;
-}
-.config-panel textarea, .config-panel input[type="text"] {
-    width: 100%; padding: 8px; border: 1px solid #ccc;
-    border-radius: 4px; font-size: 13px; box-sizing: border-box;
-}
-.config-panel textarea { resize: vertical; }
-.section-header { margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; }
-/* --- 按钮 --- */
-button { border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
-#save-config-btn { width: 100%; background-color: #28a745; color: white; margin-top: 15px; padding: 8px 0; }
-#reset-btn { background-color: #6c757d; color: white; padding: 4px 12px; font-size: 12px; }
-#send-btn { background-color: #007bff; color: white; padding: 10px 20px; }
-#save-config-btn:hover { background-color: #218838; }
-#reset-btn:hover { background-color: #5a6268; }
-#send-btn:hover { background-color: #0056b3; }
-#send-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
-/* --- 聊天窗口 --- */
-.system-prompt-container {
-    padding: 10px 20px; background-color: #fffbe6; border-bottom: 1px solid #ffe58f;
-    text-align: center; font-size: 13px; color: #8a6d3b; transition: all 0.3s ease;
-}
-.system-prompt-container.hidden { display: none; }
-.system-prompt-container p { margin: 0; }
-.chat-window { flex-grow: 1; padding: 20px; overflow-y: auto; background-color: #ffffff; }
-.message { margin-bottom: 15px; max-width: 80%; padding: 10px 15px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
-.user-message { background-color: #007bff; color: white; margin-left: auto; border-bottom-right-radius: 4px; }
-.bot-message {
-    background-color: #e9ecef; color: #333; margin-right: auto;
-    border-bottom-left-radius: 4px; display: flex; flex-direction: column;
-}
-.response-time { display: block; font-size: 10px; color: #888; margin-top: 5px; align-self: flex-end; }
-.error-message { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-.message p {
-    margin: 0;
-    /* 【核心修复】增加此行样式，确保空格能被正确渲染 */
-    white-space: pre-wrap;
-}
-.chat-input-area { display: flex; padding: 20px; border-top: 1px solid #e0e0e0; background-color: #f8f9fa; }
-#user-input {
-    flex-grow: 1; border: 1px solid #ccc; border-radius: 8px;
-    padding: 10px; font-size: 14px; resize: none; margin-right: 10px;
-}
-.slider-container { margin-top: 15px; }
-.slider-container label { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 5px; }
-.slider-container input[type="range"] { width: 100%; cursor: pointer; }
-
-/* --- Tool Call Message --- */
-.tool-call-message {
-    background-color: #f0f4f8;
-    border-left: 4px solid #4a90e2;
+/* --- 【新增】"思考链" (Decision Process) 消息样式 --- */
+.decision-process-message {
+    background-color: #fffaf0; /* 浅米黄 */
+    border-left: 4px solid #ffc107; /* 琥珀色 */
     padding: 10px 15px;
     border-radius: 8px;
-    margin: 15px auto; /* Centered with margin */
+    margin: 15px auto;
     font-family: Consolas, 'Courier New', monospace;
     font-size: 13px;
-    max-width: 95%; /* Take up most of the width */
+    max-width: 95%;
     box-sizing: border-box;
     word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
-
-.tool-call-message h3 {
+.decision-process-message h3 {
     margin: 0 0 10px 0;
     font-size: 14px;
     color: #333;
     display: flex;
     align-items: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Use default font for header */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-
-.tool-call-message h3 code {
-    background-color: #d4e3f3;
-    color: #1c3d5f;
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-left: 10px;
-    font-weight: bold;
-}
-
-.tool-call-message h4 {
-    margin: 15px 0 5px 0;
+.decision-process-message h4 {
+    margin: 10px 0 5px 0;
     font-size: 13px;
     color: #555;
     font-weight: bold;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Use default font for sub-header */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-
-.tool-call-message pre {
+.decision-process-message pre {
     background-color: #ffffff;
-    border: 1px solid #d1dce5;
+    border: 1px solid #f0e6d6;
     padding: 10px;
     border-radius: 4px;
     white-space: pre-wrap;
     word-wrap: break-word;
     margin: 0;
 }
-
-.tool-call-message code {
-    font-family: inherit;
+.decision-process-message .dp-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 5px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 12px;
+}
+.decision-process-message .dp-label {
+    font-weight: bold;
+    color: #666;
+}
+.decision-process-message .dp-value {
+    font-family: Consolas, 'Courier New', monospace;
+    color: #000;
 }
 
-/* --- 新增：工具调用时间明细样式 --- */
-.tool-time-details {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px;
-    color: #555;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #d1dce5;
+/* --- 【新增】策略库动态UI样式 --- */
+.strategy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-left: 10px;
+}
+.strategy-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.strategy-item input[type="text"] {
+    flex: 1;
+    min-width: 50px;
+    padding: 6px;
+    font-size: 12px;
+}
+.strategy-item input.strategy-key {
+    flex: 0 0 100px; /* 固定 key 的宽度 */
+    font-weight: bold;
+}
+.strategy-item input.strategy-value {
+    flex: 1;
+}
+.strategy-item .delete-strategy-btn {
+    flex-shrink: 0;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    line-height: 24px;
+    padding: 0;
+}
+.strategy-item .delete-strategy-btn:hover {
+    background-color: #c82333;
+}
+.add-strategy-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 6px 12px;
+    font-size: 12px;
+    margin-top: 5px;
+    align-self: flex-start;
+}
+.add-strategy-btn:hover {
+    background-color: #0056b3;
+}
+.activation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 15px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+.activation-item {
     display: flex;
     align-items: center;
-    flex-wrap: wrap; /* 允许换行 */
 }
-
-.time-label {
-    color: #888;
+.activation-item input[type="checkbox"] {
+    margin-right: 8px;
 }
-
-.time-value {
-    font-weight: bold;
+.activation-item label {
+    font-size: 13px;
+    font-weight: normal;
     color: #333;
-    margin-left: 4px;
+    margin: 0;
+    cursor: pointer;
 }
 
-.time-separator {
-    margin: 0 6px;
-    color: #aaa;
+/* 微调保存按钮样式 */
+.config-panel .add-strategy-btn {
+    width: auto;
+    margin-top: 5px;
+    margin-bottom: 10px;
 }
-
-.time-value.total-time {
-    color: #28a745; /* 绿色突出显示总时间 */
+.config-panel .model-config-section button {
+    width: 100%;
+    margin-top: 15px;
 }
