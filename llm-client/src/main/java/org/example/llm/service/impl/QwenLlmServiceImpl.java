@@ -33,6 +33,8 @@ public class QwenLlmServiceImpl implements LlmService {
     @Value("${alibaba.api.key}")
     private String apiKey;
 
+
+
     public QwenLlmServiceImpl(QianwenClient qianwenClient) {
         this.qianwenClient = qianwenClient;
     }
@@ -158,9 +160,13 @@ public class QwenLlmServiceImpl implements LlmService {
         if (modelName == null) {
             return false;
         }
+        // 【修改】更新为新的Qwen模型列表中常见的非指令/非优化模型
+        // 这些模型可能不支持 'result_format: message' 或需要 'enable_thinking: false'
         return Set.of(
-                "qwen3-30b-a3b", "qwen3-235b-a22b", "qwen3-32b", "qwen3-14b",
-                "qwen3-8b", "qwen3-4b", "qwen3-1.7b", "qwen3-0.6b"
+                "qwen3-0.6b", "qwen3-1.7b", "qwen3-8b", "qwen3-14b",
+                "qwen3-30b-a3b", "qwen3-32b", "qwen3-235b-a22b",
+                "qwen1.5-0.5b-chat", "qwen1.5-1.8b-chat", "qwen1.5-7b-chat",
+                "qwen1.5-14b-chat", "qwen1.5-72b-chat"
         ).contains(modelName);
     }
 

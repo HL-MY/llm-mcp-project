@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>LLM 流程编排器 (V3.0 - 数据库持久化)</title>
-    <link rel="stylesheet" href="/css/style.css">
+
+    <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
 <div class="container">
@@ -39,6 +40,9 @@
                 <p th:text="${initialState.openingMonologue}"></p>
             </div>
         </div>
+
+        <div id="decision-process-container" class="dp-fixed-container"></div>
+
         <div class="chat-input-area">
             <textarea id="user-input" placeholder="输入用户的回应..." rows="3"></textarea>
             <button id="send-btn">发送</button>
@@ -67,6 +71,9 @@
                 <label for="persona-template-input">主模型人设 (使用 {tasks}, {workflow}, {code})</label>
                 <textarea id="persona-template-input" rows="10"></textarea>
 
+                <label for="safety-redlines-input">沟通安全红线 (每行一个禁忌词)</label>
+                <textarea id="safety-redlines-input" rows="4" placeholder="例如: 我保证, 肯定没问题, 百分之百"></textarea>
+
                 <button id="save-workflow-btn" class="add-strategy-btn" style="width: 100%; margin-top: 15px;">保存工作流配置 (实时生效)</button>
             </div>
 
@@ -74,7 +81,7 @@
                 <div class="model-config-section" id="main-model-config">
                     <h3>主模型 (Main Model)</h3>
                     <label for="main-model-name-input">模型名称</label>
-                    <input type="text" id="main-model-name-input">
+                    <select id="main-model-name-input" class="model-select-list"></select>
                     <div class="slider-container">
                         <label>温度: <span id="main-temperature-value">0.7</span></label>
                         <input type="range" id="main-temperature-input" min="0" max="2" step="0.1" value="0.7">
@@ -91,7 +98,7 @@
                 <div class="model-config-section" id="pre-model-config">
                     <h3>预处理模型 (Pre-processing Model)</h3>
                     <label for="pre-model-name-input">模型名称</label>
-                    <input type="text" id="pre-model-name-input">
+                    <select id="pre-model-name-input" class="model-select-list"></select>
                     <div class="slider-container">
                         <label>温度: <span id="pre-temperature-value">0.1</span></label>
                         <input type="range" id="pre-temperature-input" min="0" max="2" step="0.1" value="0.1">
@@ -107,23 +114,33 @@
             </div>
 
             <div id="strategies-tab" class="tab-content">
+
+                <div style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                    <input type="checkbox" id="enable-strategy-input" style="vertical-align: middle;">
+                    <label for="enable-strategy-input" style="display: inline; font-weight: bold; vertical-align: middle; margin-left: 5px;">启用策略/预处理系统</label>
+                    <small style="display: block; margin-top: 5px; color: #6c757d;">(关闭后，所有意图分析、工具和策略都将跳过)</small>
+                </div>
+
+                <div style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;">
+                    <input type="checkbox" id="enable-emotion-input" style="vertical-align: middle;">
+                    <label for="enable-emotion-input" style="display: inline; font-weight: bold; vertical-align: middle; margin-left: 5px;">启用情绪识别</label>
+                    <small style="display: block; margin-top: 5px; color: #6c757d;">(关闭后，预处理将只分析意图和敏感词)</small>
+                </div>
+
                 <label for="pre-processing-prompt-input">预处理Prompt (小模型人设)</label>
                 <textarea id="pre-processing-prompt-input" rows="8"></textarea>
                 <button id="save-pre-prompt-btn" class="add-strategy-btn">保存Prompt (实时生效)</button>
 
-                <h2 class="section-header">意图策略库</h2>
-                <div id="intent-strategy-list" class="strategy-list">
+                <h2 class="section-header">🛠️ 工具/MCP 配置</h2>
+                <div id="tools-config-list" class="strategy-list" style="flex-direction: column; gap: 12px;">
                 </div>
-                <button id="add-intent-strategy-btn" class="add-strategy-btn">+ 添加新意图策略</button>
 
-                <h2 class="section-header">情绪策略库</h2>
-                <div id="emotion-strategy-list" class="strategy-list">
+                <h2 class="section-header">决策规则库 (何时出牌?)</h2>
+                <div id="decision-rules-container">
                 </div>
-                <button id="add-emotion-strategy-btn" class="add-strategy-btn">+ 添加新情绪策略</button>
+                <button id="add-decision-rule-btn" class="add-strategy-btn">+ 添加新规则</button>
 
                 <h2 class="section-header">兜底回复</h2>
-                <label for="fallback-response-input">意图为 "意图不明" 时</label>
-                <input type="text" id="fallback-response-input">
                 <label for="sensitive-response-input">检测到敏感词时</label>
                 <input type="text" id="sensitive-response-input">
                 <button id="save-fallback-btn" class="add-strategy-btn" style="width: 100%; margin-top: 15px;">保存兜底回复 (实时生效)</button>
@@ -132,6 +149,6 @@
         </div>
     </div>
 </div>
-<script src="/js/script.js"></script>
+<script th:src="@{/js/script.js}"></script>
 </body>
 </html>

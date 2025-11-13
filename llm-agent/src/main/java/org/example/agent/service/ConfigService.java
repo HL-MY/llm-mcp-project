@@ -14,14 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 【新增】
  * 这是一个核心的、单例的配置服务 (Singleton)。
- * 它替代了旧的 StrategyService, ModelConfigurationService, WorkflowStateService。
- * 它从数据库加载所有配置，并提供给 Session-scoped 的 ChatService。
- * 它也被 ConfigAdminController 调用，以实现配置的实时保存。
  */
 @Service
 @Transactional(readOnly = true) // 默认所有方法都是只读事务
@@ -36,9 +33,15 @@ public class ConfigService {
     public static final String KEY_OPENING_MONOLOGUE = "opening_monologue";
     public static final String KEY_PROCESSES = "processes";
     public static final String KEY_DEPENDENCIES = "dependencies";
-    public static final String KEY_FALLBACK = "fallback_response";
     public static final String KEY_SENSITIVE = "sensitive_response";
     public static final String KEY_PRE_PROMPT = "pre_processing_prompt";
+    public static final String KEY_ENABLE_STRATEGY = "enable_strategy";
+
+    // 【新增】情绪识别开关
+    public static final String KEY_ENABLE_EMOTION = "enable_emotion_recognition";
+    // 【新增】安全红线
+    public static final String KEY_SAFETY_REDLINES = "safety_redlines";
+
 
     private final GlobalSettingMapper globalSettingMapper;
     private final StrategyMapper strategyMapper;
@@ -58,8 +61,6 @@ public class ConfigService {
 
     /**
      * 获取所有被标记为 is_active = true 的策略
-     * @param type "INTENT" 或 "EMOTION"
-     * @return Map<Key, Value>
      */
     public Map<String, String> getActiveStrategies(String type) {
         QueryWrapper<Strategy> query = new QueryWrapper<>();
@@ -139,25 +140,65 @@ public class ConfigService {
      * 从 global_settings 表获取并解析模型参数JSON
      */
     public ModelParameters getModelParams(String key) {
+        // 定义一个安全默认值，用于数据库为空或解析失败时
+        ModelParameters safeDefault = new ModelParameters(
+                // 使用新的推荐模型名
+                KEY_MAIN_MODEL.equals(key) ? "qwen3-next-80b-a3b-instruct" : "qwen-turbo",
+                // 默认参数
+                KEY_MAIN_MODEL.equals(key) ? 0.7 : 0.1, // 温度：主模型 0.7，预处理模型 0.1
+                KEY_MAIN_MODEL.equals(key) ? 0.8 : 0.7, // Top P
+                KEY_MAIN_MODEL.equals(key) ? 2048 : 512, // Max Tokens
+                1.0, 0.0, 0.0
+        );
+
         try {
-            String json = getGlobalSetting(key, "{}");
-            return objectMapper.readValue(json, ModelParameters.class);
+            String json = getGlobalSetting(key, "{}"); // 数据库不存在时返回 "{}"
+            ModelParameters loadedParams = objectMapper.readValue(json, ModelParameters.class);
+
+            // 核心修正：如果数据库返回空JSON ({})，modelName 会是 null。
+            if (loadedParams.getModelName() == null || loadedParams.getModelName().isEmpty()) {
+                loadedParams.setModelName(safeDefault.getModelName());
+            }
+
+            // 确保其他关键参数非空 (以防只保存了一部分配置)
+            if (loadedParams.getTemperature() == null) loadedParams.setTemperature(safeDefault.getTemperature());
+            if (loadedParams.getTopP() == null) loadedParams.setTopP(safeDefault.getTopP());
+            if (loadedParams.getMaxTokens() == null) loadedParams.setMaxTokens(safeDefault.getMaxTokens());
+
+
+            return loadedParams;
         } catch (Exception e) {
-            log.error("解析模型参数JSON失败, key: {}. 返回默认值。", key, e);
+            log.error("解析模型参数JSON失败, key: {}. 返回安全默认值。", key, e);
             // 返回一个安全的默认值
-            return new ModelParameters(
-                    "qwen-turbo-instruct", 0.7, 0.7, 1024, 1.0, 0.0, 0.0
-            );
+            return safeDefault;
         }
     }
 
     public List<String> getProcessList() {
-        String processesStr = getGlobalSetting(KEY_PROCESSES, "1. 默认流程*");
-        return List.of(processesStr.split("\\r?\\n")); // 按行分割
+        return List.of(getGlobalSetting(KEY_PROCESSES, "1. 默认流程*").split("\\r?\\n")); // 按行分割
     }
 
     public String getDependencies() {
         return getGlobalSetting(KEY_DEPENDENCIES, "");
+    }
+
+    // 【新增】获取策略总开关状态
+    public Boolean getEnableStrategy() {
+        // 默认为 true
+        String value = getGlobalSetting(KEY_ENABLE_STRATEGY, "true");
+        return "true".equalsIgnoreCase(value);
+    }
+
+    // 【新增】获取情绪识别开关状态
+    public Boolean getEnableEmotionRecognition() {
+        // 默认为 true
+        String value = getGlobalSetting(KEY_ENABLE_EMOTION, "true");
+        return "true".equalsIgnoreCase(value);
+    }
+
+    // 【新增】获取安全红线
+    public String getSafetyRedlines() {
+        return getGlobalSetting(KEY_SAFETY_REDLINES, "");
     }
 
     public String getPersonaTemplate() {
@@ -169,11 +210,24 @@ public class ConfigService {
     }
 
     public String getPreProcessingPrompt() {
-        return getGlobalSetting(KEY_PRE_PROMPT, "分析：{ \"intent\": \"意图不明\", \"emotion\": \"中性\", \"is_sensitive\": \"false\" }");
-    }
+        String defaultPrompt = """
+                你是一个专门用于分析用户输入的小模型。
+                请严格按照 JSON 格式输出分析结果，不需要任何解释或额外文字。
+                
+                分析结果必须包含三个字段：
+                1. "intent": 识别用户的意图。可选值：比较套餐, 查询FAQ, 有升级意向, 用户抱怨, 闲聊, 意图不明。
+                2. "emotion": 识别用户的情绪。可选值：高兴, 生气, 困惑, 中性。
+                3. "is_sensitive": 判断用户输入是否包含敏感词。可选值："true" 或 "false"。
+                
+                示例输出:
+                { "intent": "意图不明", "emotion": "中性", "is_sensitive": "false" }
+                
+                请对下面的用户输入进行分析：
+                """;
+        // 使用 getGlobalSetting 来获取数据库或默认值
+        String savedPrompt = getGlobalSetting(KEY_PRE_PROMPT, defaultPrompt);
 
-    public String getFallbackResponse() {
-        return getGlobalSetting(KEY_FALLBACK, "我没听懂。");
+        return savedPrompt;
     }
 
     public String getSensitiveResponse() {

@@ -56,7 +56,7 @@ public class TelecomToolFactory {
                 .build();
     }
 
-        /**
+    /**
      * 新增：创建 "查询套餐常见问题 (FAQ)" 工具的定义。
      * @return ToolDefinition
      */
@@ -95,6 +95,17 @@ public class TelecomToolFactory {
                 .type("function")
                 .function(function)
                 .build();
+    }
+
+    /**
+     * 【新增】获取所有工具的名称和描述映射。
+     * @return Map<ToolName, Description>
+     */
+    public static Map<String, String> getAllToolDescriptions() {
+        return Map.of(
+                "compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription(),
+                "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription()
+        );
     }
 
 
