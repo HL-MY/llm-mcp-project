@@ -47,8 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sensitiveResponseInput = document.getElementById('sensitive-response-input');
     const saveFallbackBtn = document.getElementById('save-fallback-btn');
 
-    // 【新增】决策规则库
-    const decisionRulesTBody = document.getElementById('decision-rules-tbody'); // 【修改】获取 tbody
+    // 【关键修复】确保获取的是 tbody 元素
+    const decisionRulesTBody = document.getElementById('decision-rules-tbody');
     const addDecisionRuleBtn = document.getElementById('add-decision-rule-btn');
 
 
@@ -525,11 +525,18 @@ document.addEventListener('DOMContentLoaded', () => {
         cellActions.appendChild(deleteBtn);
         row.appendChild(cellActions);
 
+        // 【关键修复】确保添加到 tbody
         decisionRulesTBody.appendChild(row);
     };
 
     // --- 【新增】加载所有决策规则 ---
     const loadDecisionRules = async () => {
+        // 【关键修复】确保 tbody 存在
+        if (!decisionRulesTBody) {
+            console.error("无法找到 'decision-rules-tbody' 元素。");
+            return;
+        }
+
         // 清空 tbody
         decisionRulesTBody.innerHTML = '';
 
@@ -545,6 +552,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 【新增】"添加新规则" 按钮逻辑 ---
     addDecisionRuleBtn.addEventListener('click', () => {
+        // 【关键修复】确保 tbody 存在
+        if (!decisionRulesTBody) {
+            alert("决策规则库表格未正确加载，无法添加新行。");
+            return;
+        }
         const newRule = {
             id: - (new Date().getTime().toString().slice(-6)), // 临时负 ID
             priority: 100,
