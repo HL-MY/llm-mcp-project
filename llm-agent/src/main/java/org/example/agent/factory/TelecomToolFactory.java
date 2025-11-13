@@ -60,15 +60,10 @@ public class TelecomToolFactory {
      * 新增：创建 "查询套餐常见问题 (FAQ)" 工具的定义。
      * @return ToolDefinition
      */
-    /**
-     * 新增：创建 "查询套餐常见问题 (FAQ)" 工具的定义。
-     * @return ToolDefinition
-     */
     public static ToolDefinition createQueryMcpFaqTool() {
         Map<String, ParameterProperty> properties = Map.of(
                 "intent", ParameterProperty.builder()
                         .type("string")
-                        //.description("...") // <-- 这里的 description 似乎也被注释掉了，先不管
                         .build()
         );
 
@@ -80,9 +75,6 @@ public class TelecomToolFactory {
 
         FunctionDefinition function = FunctionDefinition.builder()
                 .name("queryMcpFaq")
-
-                // 【修改这里】
-                // 把原来那一大段复杂的 description，替换为下面这段干净的描述
                 .description("【该工具是移动手机卡套餐知识库】" +
                         "包含用户常问的套餐问题、费用、升档信息、优惠期（合约期）、违约金等。" +
                         "当用户提到套餐、月租、流量、升级、优惠期等关键词时，调用本工具查询标准答案。" +
@@ -98,13 +90,80 @@ public class TelecomToolFactory {
     }
 
     /**
+     * 【修改】使用 amap-maps (高德) 替换旧的天气工具
+     * - 现在接收 'city' (城市名称) 作为参数
+     * @return ToolDefinition
+     */
+    public static ToolDefinition createGetWeatherTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "city", ParameterProperty.builder()
+                        .type("string")
+                        .description("需要查询天气的城市名称，例如: 杭州")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(List.of("city"))
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getWeather") // 函数名保持 "getWeather" 不变, service 层会处理
+                .description("查询指定城市的实时天气预报。")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    /**
+     * 【新增】创建 "联网搜索" 工具的定义。
+     * (根据你提供的截图 image_ff681c.png)
+     * @return ToolDefinition
+     */
+    public static ToolDefinition createWebSearchTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "query", ParameterProperty.builder()
+                        .type("string")
+                        .description("需要搜索的关键词或问题")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(List.of("query"))
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("webSearch")
+                .description("【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+
+    /**
      * 【新增】获取所有工具的名称和描述映射。
      * @return Map<ToolName, Description>
      */
     public static Map<String, String> getAllToolDescriptions() {
         return Map.of(
                 "compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription(),
-                "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription()
+                "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription(),
+                // 【修复】确保描述一致
+                "getWeather", "查询指定城市的实时天气预报。",
+                // 【新增】
+                "webSearch", "【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。"
         );
     }
 
@@ -115,8 +174,10 @@ public class TelecomToolFactory {
      */
     public static List<ToolDefinition> getAllToolDefinitions() {
         return List.of(
-                createCompareTwoPlansTool()
-                , createQueryMcpFaqTool()
+                createCompareTwoPlansTool(),
+                createQueryMcpFaqTool(),
+                createGetWeatherTool(), // (已更新)
+                createWebSearchTool() // 【新增】
         );
     }
 }

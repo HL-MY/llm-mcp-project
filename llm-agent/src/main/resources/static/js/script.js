@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const processStatusList = document.getElementById('process-status-list');
     const personaDisplay = document.getElementById('persona-display');
     const resetBtn = document.getElementById('reset-btn');
-    const decisionProcessContainer = document.getElementById('decision-process-container'); // 【新增】获取新容器
+    // const decisionProcessContainer = document.getElementById('decision-process-container'); // 【已删除】
 
     // --- 元素获取 (配置) ---
     // Tab 1: 工作流
@@ -47,8 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sensitiveResponseInput = document.getElementById('sensitive-response-input');
     const saveFallbackBtn = document.getElementById('save-fallback-btn');
 
-    // 【关键修复】确保获取的是 tbody 元素
-    const decisionRulesTBody = document.getElementById('decision-rules-tbody');
+    // 【新增】决策规则库
+    const decisionRulesTBody = document.getElementById('decision-rules-tbody'); // 【修改】获取 tbody
     const addDecisionRuleBtn = document.getElementById('add-decision-rule-btn');
 
 
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 聊天UI函数 ---
-    const addMessageToChat = (sender, text) => {
+    const addMessageToChat = (sender, text, responseTime) => { // 【修改】增加 responseTime
         chatActivity = true;
         systemPrompt.classList.add('hidden');
         const messageDiv = document.createElement('div');
@@ -154,34 +154,28 @@ document.addEventListener('DOMContentLoaded', () => {
         p.innerHTML = text; // 使用 innerHTML
         messageDiv.appendChild(p);
 
+        // 【新增】如果
+        if (responseTime) {
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'llm-time-meta';
+            timeSpan.textContent = `(LLM 响应耗时: ${responseTime} 毫秒)`;
+            messageDiv.appendChild(timeSpan);
+        }
+
         chatWindow.appendChild(messageDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     };
-    const addToolCallToChat = (toolCall) => {
-        const toolDiv = document.createElement('div');
-        toolDiv.className = 'message tool-call-message';
-        const header = document.createElement('h3');
-        header.innerHTML = `🛠️ 工具调用: <code>${toolCall.toolName}</code>`;
-        toolDiv.appendChild(header);
-        const timeDetailsDiv = document.createElement('div');
-        timeDetailsDiv.className = 'tool-time-details';
-        const llm1 = toolCall.llmFirstCallTime || 0;
-        const toolTime = toolCall.toolExecutionTime || 0;
-        const llm2 = toolCall.llmSecondCallTime || 0;
-        const total = llm1 + toolTime + llm2;
-        timeDetailsDiv.innerHTML = `... (省略时间详情) ...`;
-        toolDiv.appendChild(timeDetailsDiv);
-        chatWindow.appendChild(toolDiv);
-    };
 
-    // 【关键修改】实现决策过程的折叠功能和在聊天流中定位
+    // 【关键修复】删除这个函数，不再需要
+    // const addToolCallToChat = (toolCall) => { ... };
+
+    // 【修改】决策过程渲染函数
     const addDecisionProcessToChat = (dp, toolCallData) => {
         const dpDiv = document.createElement('div');
         dpDiv.className = 'decision-process-message'; // 默认是最小化状态
 
         const header = document.createElement('h3');
         header.className = 'dp-header';
-        // 默认显示向右箭头 (►)
         header.innerHTML = `🧠 决策过程 (耗时: ${dp.preProcessingTimeMs || 0} ms) <span class="dp-toggle-icon">►</span>`;
         dpDiv.appendChild(header);
 
@@ -199,12 +193,14 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         contentWrapper.appendChild(grid);
 
-        // 【新增】工具状态行
+        // 【修改】工具状态行
         const toolStatusDiv = document.createElement('div');
         toolStatusDiv.style.marginTop = '10px';
-        toolStatusDiv.innerHTML = toolCallData
-            ? `<strong>✔️ 工具执行状态:</strong> 已执行 (详见上方)`
-            : `<strong>❌ 工具执行状态:</strong> 未调用 (工具被禁用或主模型未请求)`;
+        if (toolCallData) {
+            toolStatusDiv.innerHTML = `<strong>✔️ 工具执行状态:</strong> 已执行`;
+        } else {
+            toolStatusDiv.innerHTML = `<strong>❌ 工具执行状态:</strong> 未调用 (工具被禁用或主模型未请求)`;
+        }
         contentWrapper.appendChild(toolStatusDiv);
 
 
@@ -229,24 +225,67 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- 折叠逻辑 ---
         header.addEventListener('click', () => {
             const icon = header.querySelector('.dp-toggle-icon');
-
-            // 【修改】切换 .is-expanded 类来控制容器样式
             dpDiv.classList.toggle('is-expanded');
-
-            // 切换 .hidden 类来控制内容可见性
             if (contentWrapper.classList.contains('hidden')) {
                 contentWrapper.classList.remove('hidden');
-                icon.textContent = '▼'; // 展开时显示向下箭头
+                icon.textContent = '▼';
             } else {
                 contentWrapper.classList.add('hidden');
-                icon.textContent = '►'; // 折叠时显示向右箭头
+                icon.textContent = '►';
             }
         });
 
-        // 【核心修改】插入到新的容器中，脱离聊天滚动流
-        decisionProcessContainer.innerHTML = '';
-        decisionProcessContainer.appendChild(dpDiv);
+        // 【核心修改】插入到聊天窗口 (chatWindow) 中
+        chatWindow.appendChild(dpDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     };
+
+    // 【新增】MCP 内容渲染函数
+    const addMcpContentToChat = (toolCallData) => {
+        const mcpDiv = document.createElement('div');
+        mcpDiv.className = 'mcp-content-message'; // 默认是最小化状态
+
+        const header = document.createElement('h3');
+        header.className = 'dp-header mcp-content-btn'; // 复用 .dp-header 样式
+        // 【修复】添加 MCP 耗时
+        header.innerHTML = `📦 MCP 内容 (<code>${toolCallData.toolName}</code> | 耗时: ${toolCallData.toolExecutionTime} ms) <span class="dp-toggle-icon">►</span>`;
+        mcpDiv.appendChild(header);
+
+        // --- 内容包装器，默认隐藏 ---
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'dp-content hidden'; // 默认隐藏
+
+        // 【新增】MCP 内容详情 (默认隐藏)
+        const mcpDetails = document.createElement('pre');
+        mcpDetails.className = 'mcp-content-details';
+        try {
+            // 格式化 JSON
+            const jsonResult = JSON.parse(toolCallData.toolResult);
+            mcpDetails.textContent = JSON.stringify(jsonResult, null, 2);
+        } catch (e) {
+            // 如果不是 JSON，直接显示
+            mcpDetails.textContent = toolCallData.toolResult;
+        }
+        contentWrapper.appendChild(mcpDetails);
+
+        // --- 折叠逻辑 ---
+        header.addEventListener('click', () => {
+            const icon = header.querySelector('.dp-toggle-icon');
+            mcpDiv.classList.toggle('is-expanded');
+            if (contentWrapper.classList.contains('hidden')) {
+                contentWrapper.classList.remove('hidden');
+                icon.textContent = '▼';
+            } else {
+                contentWrapper.classList.add('hidden');
+                icon.textContent = '►';
+            }
+        });
+
+        mcpDiv.appendChild(contentWrapper);
+        chatWindow.appendChild(mcpDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    };
+
 
     // --- 【重构】updateUiState (只更新左侧栏) ---
     const updateUiState = (state) => {
@@ -286,18 +325,22 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await api.post('/api/chat', { message });
 
-            if (data.toolCall) addToolCallToChat(data.toolCall);
-            addMessageToChat('bot', data.reply);
+            // 1. 添加 Bot 回复 (并传入 responseTime)
+            addMessageToChat('bot', data.reply, data.responseTime);
 
-            // 【修改】如果策略关闭，data.decisionProcess 会是 null，这里不会执行
+            // 2. 添加决策过程 (如果存在)
             if (data.decisionProcess) {
                 addDecisionProcessToChat(data.decisionProcess, data.toolCall);
-            } else {
-                // 如果策略关闭，清空决策框
-                decisionProcessContainer.innerHTML = '';
             }
 
+            // 3. 【新增】添加 MCP 内容框 (如果存在)
+            if (data.toolCall) {
+                addMcpContentToChat(data.toolCall);
+            }
+
+            // 4. 更新左侧 UI
             updateUiState(data.uiState);
+
         } catch (error) {
             addMessageToChat('error', `出错了: ${error.message}`);
         } finally {
@@ -320,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const newState = await api.post('/api/reset', {});
             chatWindow.innerHTML = '';
-            decisionProcessContainer.innerHTML = ''; // 【新增】重置时清空决策框
+            // decisionProcessContainer.innerHTML = ''; // 【移除】
             systemPrompt.classList.remove('hidden');
             systemPrompt.querySelector('p').textContent = '状态已重置，可以开始新一轮对话。';
             updateUiState(newState);

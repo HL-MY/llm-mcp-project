@@ -31,6 +31,11 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+
+    // 【关键修复】将正则表达式定义为常量
+    private static final Pattern PROCESS_COMPLETE_PATTERN =
+            Pattern.compile("我已完成流程\\[(?:.*[—→>]\\s*)?([^\\]]+)\\]");
+
     private final LlmServiceManager llmServiceManager;
     private final ProcessManager processManager;
     private final ConfigService configService;
@@ -38,7 +43,7 @@ public class ChatService {
     private final HttpSession httpSession;
     private final ToolService toolService;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private List<ToolDefinition> allTools;
+    private List<ToolDefinition> allTools; // 存储所有工具定义
     private int silentCount = 0;
 
     private DecisionProcessInfo lastDecisionProcess;
@@ -89,21 +94,59 @@ public class ChatService {
         long startTime = System.currentTimeMillis();
 
         // 1. --- 手动回复检查 (打断、空格) ---
-        // ... (此部分逻辑保持不变)
-        if (" ".equals(userMessage)) {
-            // ... (省略)
+        boolean isInterrupted = userMessage != null && userMessage.contains("打断");
+        boolean isSpaceMessage = " ".equals(userMessage);
+
+        String personaForUiUpdate;
+
+        if (isInterrupted) {
+            log.info("检测到用户输入'打断'，执行手动回复，不调用LLM。");
+            personaForUiUpdate = buildDynamicPersona("2", null, null);
+            String manualReply = "您请说，";
+            return new ChatCompletion(manualReply, null, null, personaForUiUpdate);
         }
 
-        // ... (流程检查保持不变)
+        if (isSpaceMessage) {
+            log.info("检测到用户输入'空格'，使用 code=3 并执行手动回复，不调用LLM。");
+            personaForUiUpdate = buildDynamicPersona("3", null, null);
+            silentCount++;
+            String manualReply;
+            if (silentCount >= 4) {
+                forceCompleteAllProcesses();
+                silentCount = 0;
+                manualReply = "好的，先不打扰您了，礼貌起见请您先挂机，祝您生活愉快，再见！";
+            } else {
+                List<String> cannedResponses = Arrays.asList("喂，您好，能听到说话么？", "我这边是中国移动流量卡渠道商的，能听到说话么？", "喂？您好，这边听不到您的声音，是信号不好吗？");
+                manualReply = cannedResponses.get(silentCount - 1);
+            }
+            LlmMessage userSpaceMessage = LlmMessage.builder().role(LlmMessage.Role.USER).content(userMessage).build();
+            LlmMessage botSilentReply = LlmMessage.builder().role(LlmMessage.Role.ASSISTANT).content(manualReply).build();
+            try {
+                getLlmServiceForMainModel().addMessagesToHistory(getSessionId(), userSpaceMessage, botSilentReply);
+                log.info("已将'空格'和'沉默回复'添加到会话历史。");
+            } catch (Exception e) {
+                log.error("手动添加会话历史失败", e);
+            }
+            return new ChatCompletion(manualReply, null, null, personaForUiUpdate);
+        }
+
+        if (getAvailableProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
+            String defaultPersona = buildDynamicPersona("1", null, null);
+            return new ChatCompletion("🎉 恭喜！所有流程均已完成！", null, null, defaultPersona);
+        }
+
+        log.info("检测到正常消息，重置 silentCount 并开始预处理。");
+        silentCount = 0;
 
         String persona;
         List<ToolDefinition> toolsToUse;
+        String finalIntent = "N/A";
 
         // 【关键修复】检查策略总开关
         if (!configService.getEnableStrategy()) {
             // Path 1: 策略已禁用 - 直接调用主模型
             this.lastDecisionProcess = null;
-            persona = buildDynamicPersona("1", null);
+            persona = buildDynamicPersona("1", null, null);
             toolsToUse = Collections.emptyList();
             log.warn("策略/预处理功能已禁用。跳过意图分析，直接使用默认人设调用主模型。");
 
@@ -122,24 +165,23 @@ public class ChatService {
 
             // 3. --- 检查 敏感词 ---
             if (preResult.isSensitive()) {
-                // 【硬拦截】敏感词立即返回
                 this.lastDecisionProcess.setSelectedStrategy("敏感词兜底");
-                return new ChatCompletion(configService.getSensitiveResponse(), null, this.lastDecisionProcess, buildDynamicPersona("1"));
+                return new ChatCompletion(configService.getSensitiveResponse(), null, this.lastDecisionProcess, buildDynamicPersona("1", null, null));
             }
 
-            // 【核心修改】使用规则引擎代替旧的策略逻辑
             // 4. --- 调用规则引擎 ---
+            Map<String, String> activeIntentStrategies = configService.getActiveStrategies("INTENT");
+
+            finalIntent = preResult.getIntent();
+            if (!activeIntentStrategies.containsKey(finalIntent)) {
+                log.warn("意图 '{}' 被检测到，但未在激活列表中，回退到 '意图不明'", finalIntent);
+                finalIntent = "意图不明";
+            }
+
             String strategyPrompt = ruleEngineService.selectBestStrategy(
-                    preResult.getIntent(),
+                    finalIntent,
                     preResult.getEmotion()
             );
-
-            // 如果规则引擎返回空（即便是“意图不明”也没有匹配到规则），则不设置策略，继续调用主模型
-            if (strategyPrompt.isEmpty() && "意图不明".equals(preResult.getIntent())) {
-                this.lastDecisionProcess.setSelectedStrategy("意图不明 (无规则匹配)");
-            } else {
-                this.lastDecisionProcess.setSelectedStrategy(strategyPrompt);
-            }
 
             // 5. --- 动态筛选出激活的 Tools ---
             toolsToUse = this.allTools.stream()
@@ -151,9 +193,26 @@ public class ChatService {
                     })
                     .collect(Collectors.toList());
 
-            // 映射 IntentKey 到 ToolName（简化处理）
+            // 映射 IntentKey 到 ToolName
             String compareToolName = "compareTwoPlans";
             String faqToolName = "queryMcpFaq";
+            String weatherToolName = "getWeather";
+            String webSearchToolName = "webSearch"; // 【新增】
+
+            // 【关键逻辑修复】如果意图是工具调用，但规则库为空，则手动创建指令
+            if (strategyPrompt.isEmpty()) {
+                if (finalIntent.equals("比较套餐") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(compareToolName))) {
+                    strategyPrompt = "用户想比较套餐。请主动调用 compareTwoPlans 工具。";
+                } else if (finalIntent.equals("查询FAQ") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(faqToolName))) {
+                    strategyPrompt = "用户在问FAQ。请主动调用 queryMcpFaq 工具。";
+                } else if (finalIntent.equals("查询天气") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
+                    strategyPrompt = "用户想查询天气。请主动调用 getWeather 工具。";
+                } else if (finalIntent.equals("联网搜索") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(webSearchToolName))) { // 【新增】
+                    strategyPrompt = "用户想联网搜索。请主动调用 webSearch 工具。";
+                } else if ("意图不明".equals(finalIntent)) {
+                    this.lastDecisionProcess.setSelectedStrategy("意图不明 (无规则匹配)");
+                }
+            }
 
             // 【核心逻辑】如果规则引擎选中的策略是一个工具，但该工具被禁用了，覆盖策略
             if (strategyPrompt.contains(compareToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(compareToolName))) {
@@ -162,8 +221,24 @@ public class ChatService {
             if (strategyPrompt.contains(faqToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(faqToolName))) {
                 strategyPrompt = "由于工具 " + faqToolName + " 已禁用，请直接用文本回复。";
             }
+            if (strategyPrompt.contains(weatherToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
+                strategyPrompt = "由于工具 " + weatherToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(webSearchToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(webSearchToolName))) { // 【新增】
+                strategyPrompt = "由于工具 " + webSearchToolName + " 已禁用，请直接用文本回复。";
+            }
 
-            persona = buildDynamicPersona("1", strategyPrompt);
+            // 添加情绪策略（如果启用）
+            if (configService.getEnableEmotionRecognition()) {
+                Map<String, String> activeEmotionStrategies = configService.getActiveStrategies("EMOTION");
+                String emotionStrategy = activeEmotionStrategies.getOrDefault(preResult.getEmotion(), "");
+                if (emotionStrategy != null && !emotionStrategy.isEmpty()) {
+                    strategyPrompt += "\n" + emotionStrategy;
+                }
+            }
+
+            this.lastDecisionProcess.setSelectedStrategy(strategyPrompt);
+            persona = buildDynamicPersona("1", strategyPrompt, finalIntent);
         }
 
         // 6. --- "主模型"调用 (合并路径 1 和 2) ---
@@ -215,7 +290,7 @@ public class ChatService {
                 请严格按照 JSON 格式输出分析结果，不需要任何解释或额外文字。
                 
                 分析结果必须包含两个字段：
-                1. "intent": 识别用户的意图。可选值：比较套餐, 查询FAQ, 有升级意向, 用户抱怨, 闲聊, 意图不明。
+                1. "intent": 识别用户的意图。可选值：比较套餐, 查询FAQ, 有升级意向, 用户抱怨, 闲聊, 意图不明, 查询天气, 联网搜索。
                 2. "is_sensitive": 判断用户输入是否包含敏感词。可选值："true" 或 "false"。
                 
                 示例输出:
@@ -253,10 +328,8 @@ public class ChatService {
                 jsonResponse = jsonResponse.substring(jsonResponse.indexOf('{'), jsonResponse.lastIndexOf('}') + 1);
             }
 
-            // 【修改】使用中文键
             PreProcessingResult result = objectMapper.readValue(jsonResponse, PreProcessingResult.class);
 
-            // 如果禁用了情绪识别，JSON 中不会返回 emotion 字段，默认为 null
             if (result.getEmotion() == null) {
                 result.setEmotion("N/A (已禁用)");
             }
@@ -269,7 +342,6 @@ public class ChatService {
 
         } catch (Exception e) {
             log.error("预处理调用失败 (模型: {}) 或解析JSON失败", preProcessorModelName, e);
-            // 【修改】使用中文键
             PreProcessingResult fallbackResult = new PreProcessingResult("中性", "意图不明", "false");
             decisionProcess.setDetectedIntent("意图不明 (解析失败)");
             return fallbackResult;
@@ -325,8 +397,9 @@ public class ChatService {
 
     private void processResponseKeywords(String llmResponse) {
         if (llmResponse == null || llmResponse.isEmpty()) return;
-        Pattern pattern = Pattern.compile("我已完成流程\\[(?:.*[—→>]\\s*)?([^\\]]+)\\]");
-        Matcher matcher = pattern.matcher(llmResponse);
+
+        Matcher matcher = PROCESS_COMPLETE_PATTERN.matcher(llmResponse);
+
         if (matcher.find()) {
             String targetProcessName = matcher.group(1).trim();
             if (!targetProcessName.isEmpty()) {
@@ -341,8 +414,6 @@ public class ChatService {
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
             case "compareTwoPlans":
-                // 【新代码 - 正确】
-                // 直接返回 ToolService 的结果
                 try {
                     return toolService.compareTwoPlans(args.get("planName1").asText(), args.get("planName2").asText());
                 } catch (Exception e) {
@@ -350,8 +421,27 @@ public class ChatService {
                     return "{\"error\": \"无法序列化套餐对比结果\"}";
                 }
             case "queryMcpFaq":
-                // （这部分你写的是对的，保持不变）
                 return toolService.queryMcpFaq(args.get("intent").asText());
+
+            case "getWeather":
+                try {
+                    // 【修改】从经纬度改为传递 'city'
+                    String city = args.get("city").asText();
+                    return toolService.getWeather(city);
+                } catch (Exception e) {
+                    log.error("解析 getWeather 参数(city)失败", e);
+                    return "{\"error\": \"解析 'city' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+
+            case "webSearch":
+                try {
+                    String query = args.get("query").asText();
+                    return toolService.webSearch(query);
+                } catch (Exception e) {
+                    log.error("解析 webSearch 参数失败", e);
+                    return "{\"error\": \"解析 'query' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+
             default:
                 return "{\"error\": \"未知工具\"}";
         }
@@ -359,9 +449,11 @@ public class ChatService {
 
     // --- 【重构】buildDynamicPersona 方法 ---
     private String buildDynamicPersona(String codeValue) {
-        return buildDynamicPersona(codeValue, null);
+        return buildDynamicPersona(codeValue, null, null);
     }
-    private String buildDynamicPersona(String codeValue, String strategyPrompt) {
+
+    // 【修改】添加 finalIntent 参数
+    private String buildDynamicPersona(String codeValue, String strategyPrompt, String finalIntent) {
         String personaTemplate = configService.getPersonaTemplate();
 
         String statusDesc;
@@ -391,6 +483,13 @@ public class ChatService {
             finalPersona += "\n\n--- 安全红线 (绝对禁止) ---\n" +
                     "你绝对不允许在回复中说出以下任何词汇或短语：\n" +
                     redlines;
+        }
+
+        // 【关键修复】如果意图是工具调用，添加更强的指令
+        // 【修改】增加 "联网搜索" 意图
+        if (finalIntent != null && (finalIntent.equals("比较套餐") || finalIntent.equals("查询FAQ") || finalIntent.equals("查询天气") || finalIntent.equals("联网搜索"))) {
+            finalPersona += "\n\n--- 强制工具调用指令 ---\n" +
+                    "检测到意图 '" + finalIntent + "'。如果工具列表中存在相应的工具，你必须调用该工具来回答，不得直接编造答案。";
         }
 
         return finalPersona;
@@ -437,8 +536,7 @@ public class ChatService {
 
     public UiState getInitialUiState() {
         String openingMonologue = configService.getOpeningMonologue();
-        String persona = buildDynamicPersona("1"); // 默认预览
-
+        String persona = buildDynamicPersona("1", null, null); // 【修改】
         Map<String, String> statuses = processManager.getAllProcesses().stream()
                 .collect(Collectors.toMap(p -> p, p -> processManager.getUnfinishedProcesses().contains(p) ? "PENDING" : "COMPLETED", (v1, v2) -> v1, LinkedHashMap::new));
 
@@ -461,7 +559,6 @@ public class ChatService {
         }
     }
 
-    // --- 【新增】用于解析依赖的辅助方法 (从旧 WorkflowStateService 移入) ---
     private Map<String, List<String>> parseAndSetDependencies(String dependencies) {
         Map<String, List<String>> rules = new HashMap<>();
         if (dependencies == null || dependencies.trim().isEmpty()) {

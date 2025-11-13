@@ -135,7 +135,7 @@ html, body {
     flex-direction: column;
 }
 
-/* 【新增】决策过程的固定容器样式 */
+/* 【修改】决策过程的固定容器样式 */
 .dp-fixed-container {
     padding: 10px 15px 0 15px; /* 顶部和左右边距，底部无边距 */
     border-top: 1px solid #f0f0f0;
@@ -184,7 +184,7 @@ html, body {
     border-radius: 15px;
     margin-bottom: 10px;
     line-height: 1.5;
-    position: relative; /* 确保时间戳可以相对定位 */
+    position: relative;
 }
 .user-message {
     background-color: #007bff;
@@ -217,11 +217,11 @@ html, body {
 
 /* LLM 响应耗时样式 - 移到右下角，小字体 */
 .message .llm-time-meta {
-    display: block; /* 强制换行 */
-    font-size: 10px; /* 极小字体 */
-    opacity: 0.6; /* 降低不透明度 */
+    display: block;
+    font-size: 10px;
+    opacity: 0.6;
     margin-top: 5px;
-    text-align: right; /* 靠右对齐 */
+    text-align: right;
     font-family: Consolas, monospace;
 }
 
@@ -270,7 +270,7 @@ html, body {
     margin-bottom: 5px;
     font-weight: bold;
 }
-/* 统一输入和选择框样式，包括新添加的 select 和 textarea */
+/* 统一输入和选择框样式 */
 .tab-content textarea, .tab-content input[type="text"], .tab-content input[type="number"], .tab-content select {
     width: 98%;
     padding: 8px;
@@ -318,8 +318,8 @@ html, body {
     box-shadow: none;
     padding: 0;
     max-width: 400px;
-    align-self: flex-start; /* 靠左，跟随 Bot 消息 */
-    margin: 5px 0 5px 10px; /* 减少边距 */
+    align-self: flex-start;
+    margin: 5px 0 5px 10px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     box-sizing: border-box;
@@ -329,36 +329,36 @@ html, body {
 /* 最小化状态下的可点击标题 */
 .decision-process-message .dp-header {
     cursor: pointer;
-    font-size: 11px;  /* 缩小字体 */
-    color: #555;     /* 调暗颜色 */
-    background-color: #f7f7f7; /* 非常浅的灰色背景 */
-    padding: 3px 8px; /* 缩小内边距 */
+    font-size: 11px;
+    color: #555;
+    background-color: #f7f7f7;
+    padding: 3px 8px;
     border-radius: 5px;
-    margin: 0; /* 移除外边距 */
-    display: inline-flex; /* 【修改】改为 inline-flex，使其宽度自适应 */
+    margin: 0;
+    display: inline-flex;
     justify-content: space-between;
     align-items: center;
-    transition: background-color 0.2s; /* 添加过渡效果 */
+    transition: background-color 0.2s;
 }
 .decision-process-message .dp-header:hover {
-    background-color: #e9e9e9; /* 悬停时变深 */
+    background-color: #e9e9e9;
 }
 .decision-process-message .dp-toggle-icon {
     font-weight: bold;
-    font-size: 10px; /* 缩小箭头 */
+    font-size: 10px;
     margin-left: 5px;
 }
 
 /* 展开状态 (is-expanded 类被 JS 添加) */
 .decision-process-message.is-expanded {
-    background-color: #fffaf0; /* 浅米黄 */
-    border-left: 4px solid #ffc107; /* 琥珀色 */
+    background-color: #fffaf0;
+    border-left: 4px solid #ffc107;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    padding: 5px 10px; /* 恢复内边距 */
+    padding: 5px 10px;
 }
 .decision-process-message.is-expanded .dp-header {
-    background-color: #f0f0f0; /* 展开时使用稍深的灰色 */
-    display: flex; /* 展开时占满整行 */
+    background-color: #f0f0f0;
+    display: flex;
 }
 
 /* 展开内容的样式 */
@@ -398,6 +398,24 @@ html, body {
     font-family: Consolas, 'Courier New', monospace;
     color: #000;
 }
+/* 【新增】MCP 内容按钮样式 */
+.decision-process-message .mcp-content-btn {
+    font-size: 11px;
+    background-color: #e6f7ff;
+    border: 1px solid #91d5ff;
+    color: #0056b3;
+}
+/* 【新增】MCP 内容详情样式 */
+.decision-process-message .mcp-content-details {
+    background-color: #2d2d2d;
+    color: #f8f8f2;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #444;
+}
 
 
 /* =================================================================== */
@@ -411,45 +429,7 @@ html, body {
     margin-bottom: 15px;
     padding-left: 10px;
 }
-.strategy-item {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-}
-.strategy-item textarea.strategy-value {
-    flex: 1;
-    min-width: 50px;
-    padding: 6px;
-    font-size: 12px;
-    resize: vertical;
-}
-.strategy-item input.strategy-key {
-    flex: 0 0 100px;
-    font-weight: bold;
-}
-.strategy-item input[type="text"], .strategy-item textarea {
-    flex: 1;
-    min-width: 50px;
-    padding: 6px;
-    font-size: 12px;
-}
-.strategy-item .delete-strategy-btn {
-    flex-shrink: 0;
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
-    line-height: 24px;
-    padding: 0;
-}
-.strategy-item .delete-strategy-btn:hover {
-    background-color: #c82333;
-}
+
 .add-strategy-btn {
     background-color: #007bff;
     color: white;
@@ -536,4 +516,14 @@ html, body {
     height: 24px;
     line-height: 24px;
     vertical-align: middle; /* 与保存按钮对齐 */
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+.rules-table .delete-strategy-btn:hover {
+    background-color: #c82333;
 }
