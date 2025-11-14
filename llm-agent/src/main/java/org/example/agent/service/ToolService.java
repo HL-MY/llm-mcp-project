@@ -25,8 +25,6 @@ public class ToolService {
     private final FaqService faqService;
     private final ObjectMapper mapper = new ObjectMapper();
     private final WebClient webClient;
-
-    // 【关键修复】存储带 "Bearer " 前缀的 Key
     private final String dashscopeApiKeyWithBearer;
 
     public ToolService(PlanService planService, FaqService faqService,
@@ -35,11 +33,10 @@ public class ToolService {
         this.planService = planService;
         this.faqService = faqService;
         this.webClient = webClientBuilder.build();
-        // 【关键修复】还原回 V11/V12 的鉴权方式，Python 脚本证明了这是对的
+        // 使用 Bearer 鉴权方式
         this.dashscopeApiKeyWithBearer = "Bearer " + dashscopeApiKey;
     }
 
-    // ... (compareTwoPlans 和 queryMcpFaq 保持不变) ...
     public String compareTwoPlans(String planName1, String planName2) {
         log.info("ToolService: 正在直接调用 PlanService 比较套餐: {} vs {}", planName1, planName2);
         try {
@@ -49,6 +46,7 @@ public class ToolService {
             return "{\"error\": \"无法比较套餐\"}";
         }
     }
+
     public String queryMcpFaq(String intent) {
         log.info("ToolService: 正在调用 FaqService 查询FAQ, 意图: {}", intent);
         try {
@@ -59,9 +57,8 @@ public class ToolService {
         }
     }
 
-
     /**
-     * 【V11/V12 版 - 封装 Payload】
+     * 调用天气查询服务
      */
     public String getWeather(String city, String date) {
         log.info("ToolService: 正在调用 WebClient (SSE) 查询天气 (amap-maps)");
@@ -69,12 +66,11 @@ public class ToolService {
 
         String sseUrl = "https://dashscope.aliyuncs.com/api/v1/mcps/amap-maps/sse";
 
-        // 1. 创建参数 map
+        // 构建请求参数
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("city", city);
         parameters.put("date", date);
 
-        // 2. 封装到 "parameters" key 下
         Map<String, Object> input = Map.of(
                 "parameters", parameters
         );
@@ -88,13 +84,12 @@ public class ToolService {
         try {
             String fullResponse = webClient.post()
                     .uri(sseUrl)
-                    // 【关键修复】使用 Authorization: Bearer ...
+                    // 使用 Authorization: Bearer ...
                     .header("Authorization", this.dashscopeApiKeyWithBearer)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToFlux(String.class)
-                    // ... (SSE 处理逻辑不变) ...
                     .filter(sseLine -> sseLine.startsWith("data:"))
                     .map(sseLine -> sseLine.substring(5).trim())
                     .filter(data -> !data.isEmpty() && !data.equalsIgnoreCase("[DONE]"))
@@ -139,13 +134,12 @@ public class ToolService {
 
         } catch (Exception e) {
             log.error("调用 WebClient getWeather (amap-maps) 失败", e);
-            // 【关键】将 401 错误信息返回给 ChatService
             return "{\"error\": \"调用 WebClient getWeather 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
 
     /**
-     * 【V11/V12 版 - 封装 Payload】
+     * 调用网络搜索服务
      */
     public String webSearch(String query, Integer count) {
         log.info("ToolService: 正在调用 WebClient (SSE) 联网搜索");
@@ -153,12 +147,11 @@ public class ToolService {
 
         String sseUrl = "https://dashscope.aliyuncs.com/api/v1/mcps/webSearch/sse";
 
-        // 1. 创建参数 map
+        // 构建请求参数
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("query", query);
         parameters.put("count", count);
 
-        // 2. 封装到 "parameters" key 下
         Map<String, Object> input = Map.of(
                 "parameters", parameters
         );
@@ -172,13 +165,12 @@ public class ToolService {
         try {
             String fullResponse = webClient.post()
                     .uri(sseUrl)
-                    // 【关键修复】使用 Authorization: Bearer ...
+                    // 使用 Authorization: Bearer ...
                     .header("Authorization", this.dashscopeApiKeyWithBearer)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToFlux(String.class)
-                    // ... (SSE 处理逻辑不变) ...
                     .filter(sseLine -> sseLine.startsWith("data:"))
                     .map(sseLine -> sseLine.substring(5).trim())
                     .filter(data -> !data.isEmpty() && !data.equalsIgnoreCase("[DONE]"))
