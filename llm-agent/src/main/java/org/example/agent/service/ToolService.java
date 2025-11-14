@@ -10,8 +10,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ToolService {
@@ -22,7 +26,8 @@ public class ToolService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final WebClient webClient;
 
-    private final String dashscopeApiKey;
+    // 【关键修复】存储带 "Bearer " 前缀的 Key
+    private final String dashscopeApiKeyWithBearer;
 
     public ToolService(PlanService planService, FaqService faqService,
                        WebClient.Builder webClientBuilder,
@@ -30,10 +35,11 @@ public class ToolService {
         this.planService = planService;
         this.faqService = faqService;
         this.webClient = webClientBuilder.build();
-        // 构造函数已自动添加 "Bearer "
-        this.dashscopeApiKey = "Bearer " + dashscopeApiKey;
+        // 【关键修复】还原回 V11/V12 的鉴权方式，Python 脚本证明了这是对的
+        this.dashscopeApiKeyWithBearer = "Bearer " + dashscopeApiKey;
     }
 
+    // ... (compareTwoPlans 和 queryMcpFaq 保持不变) ...
     public String compareTwoPlans(String planName1, String planName2) {
         log.info("ToolService: 正在直接调用 PlanService 比较套餐: {} vs {}", planName1, planName2);
         try {
@@ -43,7 +49,6 @@ public class ToolService {
             return "{\"error\": \"无法比较套餐\"}";
         }
     }
-
     public String queryMcpFaq(String intent) {
         log.info("ToolService: 正在调用 FaqService 查询FAQ, 意图: {}", intent);
         try {
@@ -54,19 +59,26 @@ public class ToolService {
         }
     }
 
-    public String getWeather(String city) {
-        log.info("ToolService: 正在调用 WebClient (SSE) 查询天气 (amap-maps)");
-        log.info("ToolService: 城市: {}", city);
 
-        // Python 示例中的 URL
+    /**
+     * 【V11/V12 版 - 封装 Payload】
+     */
+    public String getWeather(String city, String date) {
+        log.info("ToolService: 正在调用 WebClient (SSE) 查询天气 (amap-maps)");
+        log.info("ToolService: 城市: {}, 日期: {}", city, date);
+
         String sseUrl = "https://dashscope.aliyuncs.com/api/v1/mcps/amap-maps/sse";
 
-        // 【猜测】amap-maps 的 input 结构
+        // 1. 创建参数 map
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("city", city);
+        parameters.put("date", date);
+
+        // 2. 封装到 "parameters" key 下
         Map<String, Object> input = Map.of(
-                "city", city
+                "parameters", parameters
         );
 
-        // 【猜测】amap-maps 的 model 名称
         Map<String, Object> requestBody = Map.of(
                 "model", "amap-maps",
                 "input", input,
@@ -76,13 +88,13 @@ public class ToolService {
         try {
             String fullResponse = webClient.post()
                     .uri(sseUrl)
-                    // 【关键修复】使用构造函数中加载的 API Key
-                    .header("Authorization", this.dashscopeApiKey)
+                    // 【关键修复】使用 Authorization: Bearer ...
+                    .header("Authorization", this.dashscopeApiKeyWithBearer)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToFlux(String.class)
-                    // (后续的 SSE 处理逻辑保持不变)
+                    // ... (SSE 处理逻辑不变) ...
                     .filter(sseLine -> sseLine.startsWith("data:"))
                     .map(sseLine -> sseLine.substring(5).trim())
                     .filter(data -> !data.isEmpty() && !data.equalsIgnoreCase("[DONE]"))
@@ -127,43 +139,46 @@ public class ToolService {
 
         } catch (Exception e) {
             log.error("调用 WebClient getWeather (amap-maps) 失败", e);
+            // 【关键】将 401 错误信息返回给 ChatService
             return "{\"error\": \"调用 WebClient getWeather 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
 
     /**
-     * 【新增】调用 Dashscope 联网搜索 (webSearch)
-     * (根据你提供的截图 image_ff681c.png)
+     * 【V11/V12 版 - 封装 Payload】
      */
-    public String webSearch(String query) {
+    public String webSearch(String query, Integer count) {
         log.info("ToolService: 正在调用 WebClient (SSE) 联网搜索");
-        log.info("ToolService: 搜索词: {}", query);
+        log.info("ToolService: 搜索词: {}, 数量: {}", query, count);
 
-        // 从截图中获取的 SSE URL
         String sseUrl = "https://dashscope.aliyuncs.com/api/v1/mcps/webSearch/sse";
 
-        // 构建输入参数 (基于 LLM tool definition)
+        // 1. 创建参数 map
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("query", query);
+        parameters.put("count", count);
+
+        // 2. 封装到 "parameters" key 下
         Map<String, Object> input = Map.of(
-                "query", query
+                "parameters", parameters
         );
 
-        // 构建请求体 (model name 来自截图)
         Map<String, Object> requestBody = Map.of(
-                "model", "jisu-search.internet", // 【已修复】
+                "model", "jisu-search.internet",
                 "input", input,
                 "stream", true
         );
 
         try {
-            // 这部分逻辑与 getWeather 完全相同，只是请求体和 URL 不同
             String fullResponse = webClient.post()
                     .uri(sseUrl)
-                    // 使用构造函数中加载的 API Key
-                    .header("Authorization", this.dashscopeApiKey)
+                    // 【关键修复】使用 Authorization: Bearer ...
+                    .header("Authorization", this.dashscopeApiKeyWithBearer)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToFlux(String.class)
+                    // ... (SSE 处理逻辑不变) ...
                     .filter(sseLine -> sseLine.startsWith("data:"))
                     .map(sseLine -> sseLine.substring(5).trim())
                     .filter(data -> !data.isEmpty() && !data.equalsIgnoreCase("[DONE]"))

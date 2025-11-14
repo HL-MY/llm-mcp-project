@@ -281,10 +281,12 @@ public class ChatService {
         if (configService.getEnableEmotionRecognition()) {
             // 1. 包含情绪、意图、敏感词
             String basePrompt = configService.getPreProcessingPrompt();
+            // 【重要】请确保你在 UI/数据库中配置的 "basePrompt" 也更新了意图列表
             fullPrompt = basePrompt + "\n输入: \"" + userMessage + "\"";
         } else {
             // 2. 仅包含意图、敏感词
             log.info("情绪识别已禁用，使用仅意图分析的 Prompt。");
+            // 【V13 修复】在这里加入 联网搜索 和 查询天气
             String simplifiedPrompt = """
                 你是一个专门用于分析用户输入的小模型。
                 请严格按照 JSON 格式输出分析结果，不需要任何解释或额外文字。
@@ -411,6 +413,10 @@ public class ChatService {
         }
     }
 
+    /**
+     * 【V11 - 最终修改】
+     * - 提取并传递所有必需的参数
+     */
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
             case "compareTwoPlans":
@@ -425,21 +431,26 @@ public class ChatService {
 
             case "getWeather":
                 try {
-                    // 【修改】从经纬度改为传递 'city'
+                    // 【V11 修改】
                     String city = args.get("city").asText();
-                    return toolService.getWeather(city);
+                    // date 是可选的
+                    String date = args.has("date") ? args.get("date").asText() : "today";
+                    return toolService.getWeather(city, date);
                 } catch (Exception e) {
-                    log.error("解析 getWeather 参数(city)失败", e);
-                    return "{\"error\": \"解析 'city' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                    log.error("解析 getWeather 参数(city, date)失败", e);
+                    return "{\"error\": \"解析 'getWeather' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
                 }
 
             case "webSearch":
                 try {
+                    // 【V11 修改】
                     String query = args.get("query").asText();
-                    return toolService.webSearch(query);
+                    // count 是可选的
+                    Integer count = args.has("count") ? args.get("count").asInt() : 5;
+                    return toolService.webSearch(query, count);
                 } catch (Exception e) {
-                    log.error("解析 webSearch 参数失败", e);
-                    return "{\"error\": \"解析 'query' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                    log.error("解析 webSearch 参数(query, count)失败", e);
+                    return "{\"error\": \"解析 'webSearch' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
                 }
 
             default:
@@ -486,7 +497,7 @@ public class ChatService {
         }
 
         // 【关键修复】如果意图是工具调用，添加更强的指令
-        // 【修改】增加 "联网搜索" 意图
+        // 【修改】增加 "联网搜索" 和 "查询天气" 意图
         if (finalIntent != null && (finalIntent.equals("比较套餐") || finalIntent.equals("查询FAQ") || finalIntent.equals("查询天气") || finalIntent.equals("联网搜索"))) {
             finalPersona += "\n\n--- 强制工具调用指令 ---\n" +
                     "检测到意图 '" + finalIntent + "'。如果工具列表中存在相应的工具，你必须调用该工具来回答，不得直接编造答案。";
@@ -559,6 +570,7 @@ public class ChatService {
         }
     }
 
+    // --- 【新增】用于解析依赖的辅助方法 (从旧 WorkflowStateService 移入) ---
     private Map<String, List<String>> parseAndSetDependencies(String dependencies) {
         Map<String, List<String>> rules = new HashMap<>();
         if (dependencies == null || dependencies.trim().isEmpty()) {
