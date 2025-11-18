@@ -5,10 +5,13 @@ import org.example.llm.dto.tool.ParameterProperty;
 import org.example.llm.dto.tool.ParameterSchema;
 import org.example.llm.dto.tool.ToolDefinition;
 
+import com.google.gson.Gson; // 导入 Gson
 import java.util.List;
 import java.util.Map;
 
 public class TelecomToolFactory {
+
+    private static final Gson gson = new Gson(); // 用于 enum
 
     public static ToolDefinition createCompareTwoPlansTool() {
         FunctionDefinition function = FunctionDefinition.builder()
@@ -69,27 +72,43 @@ public class TelecomToolFactory {
                 .build();
     }
 
+    /**
+     * 【V14 最终版】
+     * - 替换为 和风天气(QWeather) 的定义, 匹配 QWeatherTool.java 的逻辑
+     * - LLM 调用的工具名仍为 'getWeather'
+     */
     public static ToolDefinition createGetWeatherTool() {
+        // 1. 定义参数
+        // 1a. 城市 (必需)
+        ParameterProperty cityParam = ParameterProperty.builder()
+                .type("string")
+                .description("需要查询天气的城市名称, 例如 '北京', '上海'")
+                .build();
+
+        // 1b. 预报类型 (必需)
+        ParameterProperty forecastParam = ParameterProperty.builder()
+                .type("string")
+                .description("查询的类型。'now' 表示实时天气, '3d' 表示未来3天预报。如果用户没说，默认为 'now'。")
+                // 1c. 限制 LLM 只能从这两个值中选择
+                .enumValues(List.of("now", "3d"))
+                .build();
+
         Map<String, ParameterProperty> properties = Map.of(
-                "city", ParameterProperty.builder()
-                        .type("string")
-                        .description("需要查询天气的城市名称，例如: 杭州")
-                        .build(),
-                "date", ParameterProperty.builder()
-                        .type("string")
-                        .description("需要查询的日期，例如 'today'。如果用户未指定，请使用 'today'。")
-                        .build()
+                "city", cityParam,
+                "forecast_type", forecastParam
         );
 
+        // 2. 构建 ParameterSchema
         ParameterSchema parameters = ParameterSchema.builder()
                 .type("object")
                 .properties(properties)
-                .required(List.of("city", "date"))
+                .required(List.of("city", "forecast_type")) // 强制 LLM 两者都返回
                 .build();
 
+        // 3. 构建 FunctionDefinition
         FunctionDefinition function = FunctionDefinition.builder()
-                .name("getWeather")
-                .description("查询指定城市和日期的实时天气预报。")
+                .name("getWeather") // 我们保持 'getWeather' 名称不变，ChatService 会路由
+                .description("获取指定城市的实时天气或未来3天天气预报。") // 描述更新
                 .parameters(parameters)
                 .build();
 
@@ -99,42 +118,14 @@ public class TelecomToolFactory {
                 .build();
     }
 
-    public static ToolDefinition createWebSearchTool() {
-        Map<String, ParameterProperty> properties = Map.of(
-                "query", ParameterProperty.builder()
-                        .type("string")
-                        .description("需要搜索的关键词或问题")
-                        .build(),
-                "count", ParameterProperty.builder()
-                        .type("number")
-                        .description("需要返回的搜索结果数量。如果用户未指定，请使用 5。")
-                        .build()
-        );
-
-        ParameterSchema parameters = ParameterSchema.builder()
-                .type("object")
-                .properties(properties)
-                .required(List.of("query", "count"))
-                .build();
-
-        FunctionDefinition function = FunctionDefinition.builder()
-                .name("webSearch")
-                .description("【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。")
-                .parameters(parameters)
-                .build();
-
-        return ToolDefinition.builder()
-                .type("function")
-                .function(function)
-                .build();
-    }
+    // 【V14 移除】
+    // public static ToolDefinition createWebSearchTool() { ... }
 
     public static Map<String, String> getAllToolDescriptions() {
         return Map.of(
                 "compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription(),
                 "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription(),
-                "getWeather", "查询指定城市和日期的实时天气预报。",
-                "webSearch", "【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。"
+                "getWeather", "获取指定城市的实时天气或未来3天天气预报。" // 描述更新
         );
     }
 
@@ -142,8 +133,7 @@ public class TelecomToolFactory {
         return List.of(
                 createCompareTwoPlansTool(),
                 createQueryMcpFaqTool(),
-                createGetWeatherTool(),
-                createWebSearchTool()
+                createGetWeatherTool() // (已更新)
         );
     }
 }

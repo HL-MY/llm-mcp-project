@@ -207,7 +207,7 @@ public class ChatService {
             String compareToolName = "compareTwoPlans";
             String faqToolName = "queryMcpFaq";
             String weatherToolName = "getWeather";
-            String webSearchToolName = "webSearch";
+            // 【V14 移除】 String webSearchToolName = "webSearch";
 
             // 如果意图是工具调用，但规则库为空，则手动创建指令（防止规则配置缺失）
             if (strategyPrompt.isEmpty()) {
@@ -217,9 +217,9 @@ public class ChatService {
                     strategyPrompt = "用户在问FAQ。请主动调用 queryMcpFaq 工具。";
                 } else if (finalIntent.equals("查询天气") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
                     strategyPrompt = "用户想查询天气。请主动调用 getWeather 工具。";
-                } else if (finalIntent.equals("联网搜索") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(webSearchToolName))) {
-                    strategyPrompt = "用户想联网搜索。请主动调用 webSearch 工具。";
-                } else if ("意图不明".equals(finalIntent)) {
+                }
+                // 【V14 移除】 联网搜索的 else if
+                else if ("意图不明".equals(finalIntent)) {
                     this.lastDecisionProcess.setSelectedStrategy("意图不明 (无规则匹配)");
                 }
             }
@@ -234,9 +234,7 @@ public class ChatService {
             if (strategyPrompt.contains(weatherToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
                 strategyPrompt = "由于工具 " + weatherToolName + " 已禁用，请直接用文本回复。";
             }
-            if (strategyPrompt.contains(webSearchToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(webSearchToolName))) {
-                strategyPrompt = "由于工具 " + webSearchToolName + " 已禁用，请直接用文本回复。";
-            }
+            // 【V14 移除】 联网搜索的 if
 
             // 添加情绪策略（如果启用）
             if (configService.getEnableEmotionRecognition()) {
@@ -306,12 +304,13 @@ public class ChatService {
         } else {
             // 2. 仅包含意图、敏感词
             log.info("情绪识别已禁用，使用仅意图分析的 Prompt。");
+            // 【V14 修复】移除 联网搜索
             String simplifiedPrompt = """
                 你是一个专门用于分析用户输入的小模型。
                 请严格按照 JSON 格式输出分析结果，不需要任何解释或额外文字。
                 
                 分析结果必须包含两个字段：
-                1. "intent": 识别用户的意图。可选值：比较套餐, 查询FAQ, 有升级意向, 用户抱怨, 闲聊, 意图不明, 查询天气, 联网搜索。
+                1. "intent": 识别用户的意图。可选值：比较套餐, 查询FAQ, 有升级意向, 用户抱怨, 闲聊, 意图不明, 查询天气。
                 2. "is_sensitive": 判断用户输入是否包含敏感词。可选值："true" 或 "false"。
                 
                 示例输出:
@@ -449,11 +448,10 @@ public class ChatService {
     }
 
     /**
-     * 执行具体的工具调用逻辑。
-     * - 提取并传递所有必需的参数
-     * @param toolName 工具名称
-     * @param args 工具参数 JSON
-     * @return 工具执行结果（JSON 字符串）
+     * 【V14 最终版】
+     * - 匹配 'getWeather'
+     * - 提取 'city' 和 'forecast_type'
+     * - 移除 'webSearch'
      */
     private String executeTool(String toolName, JsonNode args) {
         switch (toolName) {
@@ -469,25 +467,17 @@ public class ChatService {
 
             case "getWeather":
                 try {
+                    // LLM 已被强制返回这两个参数
                     String city = args.get("city").asText();
-                    // date 是可选的
-                    String date = args.has("date") ? args.get("date").asText() : "today";
-                    return toolService.getWeather(city, date);
+                    String forecastType = args.get("forecast_type").asText();
+                    return toolService.getWeather(city, forecastType);
                 } catch (Exception e) {
-                    log.error("解析 getWeather 参数(city, date)失败", e);
+                    log.error("解析 getWeather 参数(city, forecast_type)失败", e);
                     return "{\"error\": \"解析 'getWeather' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
                 }
 
-            case "webSearch":
-                try {
-                    String query = args.get("query").asText();
-                    // count 是可选的
-                    Integer count = args.has("count") ? args.get("count").asInt() : 5;
-                    return toolService.webSearch(query, count);
-                } catch (Exception e) {
-                    log.error("解析 webSearch 参数(query, count)失败", e);
-                    return "{\"error\": \"解析 'webSearch' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
-                }
+                // 【V14 移除】
+                // case "webSearch": ...
 
             default:
                 return "{\"error\": \"未知工具\"}";
@@ -537,8 +527,9 @@ public class ChatService {
                     redlines;
         }
 
+        // 【V14 修复】移除 联网搜索
         // 如果意图是工具调用，添加更强的指令，强制 LLM 调用工具
-        if (finalIntent != null && (finalIntent.equals("比较套餐") || finalIntent.equals("查询FAQ") || finalIntent.equals("查询天气") || finalIntent.equals("联网搜索"))) {
+        if (finalIntent != null && (finalIntent.equals("比较套餐") || finalIntent.equals("查询FAQ") || finalIntent.equals("查询天气"))) {
             finalPersona += "\n\n--- 强制工具调用指令 ---\n" +
                     "检测到意图 '" + finalIntent + "'。如果工具列表中存在相应的工具，你必须调用该工具来回答，不得直接编造答案。";
         }
