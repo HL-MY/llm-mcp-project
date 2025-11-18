@@ -4,10 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * 用于承载 "预处理模型" (小模型) 分析结果的 DTO。
- * 包含情绪、意图和敏感词检测结果。
- */
 @Data
 @NoArgsConstructor
 public class PreProcessingResult {
@@ -16,16 +12,21 @@ public class PreProcessingResult {
     private String intent;
 
     @JsonProperty("is_sensitive")
-    private String isSensitive; // 使用 String 兼容 "true" / "false"
+    private String isSensitive;
 
-    // 用于代码中设置默认值或回退
-    public PreProcessingResult(String emotion, String intent, String isSensitive) {
-        this.emotion = emotion;
-        this.intent = intent;
-        this.isSensitive = isSensitive;
-    }
+    // --- 【新增】直通车字段 ---
+    @JsonProperty("tool_name")
+    private String toolName; // 如果小模型觉得要调工具，直接填名字
+
+    @JsonProperty("tool_args")
+    private String toolArgs; // 工具参数 JSON 字符串
 
     public boolean isSensitive() {
         return "true".equalsIgnoreCase(isSensitive);
+    }
+
+    // 【新增】判断是否触发了快速工具调用
+    public boolean hasDirectToolCall() {
+        return toolName != null && !toolName.isEmpty() && !"null".equalsIgnoreCase(toolName);
     }
 }

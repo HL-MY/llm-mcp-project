@@ -1,529 +1,517 @@
-/* =================================================================== */
-/* 0. 关键隐藏规则 */
-/* =================================================================== */
-/* 确保添加此 CSS 规则，它会使所有带有 'hidden' 类的元素隐藏，从而实现折叠 */
-.hidden {
-    display: none !important;
+:root {
+    --primary-color: #007AFF; /* iOS 风格蓝 */
+    --bg-color: #F2F2F7;      /* 整体背景灰 */
+    --card-bg: #FFFFFF;       /* 卡片白 */
+    --text-main: #1C1C1E;     /*主要文字黑 */
+    --text-sub: #8E8E93;      /* 次要文字灰 */
+    --border-color: #E5E5EA;  /* 边框色 */
+    --danger-color: #FF3B30;  /* 删除/危险红 */
+    --success-color: #34C759; /* 成功绿 */
 }
 
-
-/* =================================================================== */
-/* 1. 基础布局和三栏结构 */
-/* =================================================================== */
-html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
+body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f4f9; /* 浅灰色背景 */
-    color: #333;
-    font-size: 14px;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    margin: 0;
+    height: 100vh;
+    overflow: hidden; /* 防止 body 滚动 */
 }
 
-/* 核心容器：使用 Flexbox 实现三栏布局 */
+/* --- 1. 核心布局 (三栏) --- */
 .container {
     display: flex;
-    height: 100vh; /* 确保占据整个视口高度 */
-    max-width: 1400px; /* 限制最大宽度 */
-    margin: 0 auto; /* 居中 */
-    border: 1px solid #ddd;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    background-color: white;
-    overflow: hidden; /* 防止内容溢出 */
+    height: 100%;
+    max-width: 1600px; /*在大屏幕上限制最大宽度 */
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
 }
 
-/* 左侧栏：状态和人设 */
 .preview-pane {
-    flex: 0 0 280px; /* 固定宽度 */
+    flex: 0 0 260px;
+    border-right: 1px solid var(--border-color);
     padding: 20px;
-    border-right: 1px solid #eee;
-    background-color: #f9f9f9;
-    overflow-y: auto;
-}
-
-/* 中间栏：聊天窗口 */
-.chat-pane {
-    flex: 1; /* 占据剩余空间 */
+    background: #FAFAFA;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    position: relative;
-    padding: 0;
 }
 
-/* 右侧栏：配置面板 */
-.config-pane {
-    flex: 0 0 400px; /* 固定宽度 */
-    padding: 20px;
-    border-left: 1px solid #eee;
-    background-color: #f9f9f9;
-    overflow-y: auto;
-}
-
-
-/* =================================================================== */
-/* 2. 左侧状态面板样式 */
-/* =================================================================== */
-.status-panel, .persona-panel {
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #ddd;
-}
-.status-panel h2, .persona-panel h2 {
-    font-size: 16px;
-    margin-top: 0;
-    margin-bottom: 10px;
+.chat-pane {
+    flex: 1;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    background: #fff;
+    position: relative;
+    min-width: 0; /* 防止 flex 子项溢出 */
 }
-.header-buttons button {
-    padding: 4px 8px;
-    font-size: 12px;
-    background-color: #ffc107;
-    border: 1px solid #ffc107;
-    border-radius: 4px;
-    cursor: pointer;
+
+.config-pane {
+    flex: 0 0 440px; /* 配置栏稍微宽一点 */
+    border-left: 1px solid var(--border-color);
+    padding: 20px;
+    background: #F9F9F9;
+    overflow-y: auto; /* 允许配置栏内部滚动 */
 }
+
+/* --- 2. 左侧状态栏 --- */
+.preview-pane h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 15px;
+}
+
 #process-status-list {
     list-style: none;
     padding: 0;
     margin: 0;
     font-size: 13px;
 }
+
 #process-status-list li {
-    padding: 5px 0;
+    padding: 8px 0;
+    border-bottom: 1px dashed #eee;
     display: flex;
     align-items: center;
-}
-#process-status-list li span:last-child {
-    flex-grow: 1;
-    margin-left: 8px;
-}
-.status-completed {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background-color: #28a745; /* 绿色 */
-    border-radius: 50%;
-}
-.status-pending {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background-color: #ffc107; /* 黄色 */
-    border-radius: 50%;
-}
-#persona-display {
-    white-space: pre-wrap;
-    background-color: #fff;
-    padding: 10px;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    font-size: 12px;
+    color: #555;
 }
 
+.status-completed { color: var(--success-color); margin-right: 8px; font-size: 12px; }
+.status-pending { color: #FFCC00; margin-right: 8px; font-size: 12px; }
 
-/* =================================================================== */
-/* 3. 聊天区域样式 */
-/* =================================================================== */
+/* --- 3. 中间聊天窗口 --- */
 .chat-window {
-    flex-grow: 1;
+    flex: 1;
     overflow-y: auto;
-    padding: 15px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-}
-
-/* 【修改】决策过程的固定容器样式 */
-.dp-fixed-container {
-    padding: 10px 15px 0 15px; /* 顶部和左右边距，底部无边距 */
-    border-top: 1px solid #f0f0f0;
-    flex-shrink: 0; /* 防止容器在 flex 布局中被压缩 */
-    background-color: #ffffff;
-    z-index: 10;
-}
-
-
-.chat-input-area {
-    display: flex;
-    padding: 15px;
-    border-top: 1px solid #eee;
-    background-color: #fff;
-}
-#user-input {
-    flex-grow: 1;
-    resize: none;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    margin-right: 10px;
-    font-size: 14px;
-}
-#send-btn {
-    padding: 10px 15px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    flex-shrink: 0;
-}
-#send-btn:hover:not([disabled]) {
-    background-color: #0056b3;
-}
-#send-btn:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
+    gap: 15px;
 }
 
 .message {
-    max-width: 70%;
-    padding: 10px;
-    border-radius: 15px;
-    margin-bottom: 10px;
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 18px;
     line-height: 1.5;
+    font-size: 14px;
+    word-wrap: break-word;
     position: relative;
 }
+
+.bot-message {
+    background: #F2F2F7;
+    color: #000;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
 .user-message {
-    background-color: #007bff;
+    background: var(--primary-color);
     color: white;
     align-self: flex-end;
-    border-bottom-right-radius: 2px;
-}
-.bot-message {
-    background-color: #e9ecef;
-    color: #333;
-    align-self: flex-start;
-    border-bottom-left-radius: 2px;
-}
-.system-prompt-container {
-    padding: 15px;
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeeba;
-    border-radius: 4px;
-    margin: 15px;
-    text-align: center;
-    transition: opacity 0.3s;
-}
-.system-prompt-container.hidden {
-    display: none;
-}
-.message p {
-    margin: 0;
+    border-bottom-right-radius: 4px;
 }
 
-/* LLM 响应耗时样式 - 移到右下角，小字体 */
-.message .llm-time-meta {
-    display: block;
+.llm-time-meta {
     font-size: 10px;
     opacity: 0.6;
-    margin-top: 5px;
+    display: block;
     text-align: right;
-    font-family: Consolas, monospace;
+    margin-top: 4px;
+    font-family: monospace;
 }
 
-
-/* =================================================================== */
-/* 4. 配置面板样式 */
-/* =================================================================== */
-.config-panel {
+/* 输入区域 */
+.chat-input-area {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
     display: flex;
-    flex-direction: column;
-}
-.tab-container {
-    display: flex;
-    margin-bottom: 15px;
-}
-.tab-button {
-    flex-grow: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    background-color: #f0f0f0;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.tab-button:first-child {
-    border-right: none;
-    border-top-left-radius: 4px;
-}
-.tab-button:last-child {
-    border-top-right-radius: 4px;
-}
-.tab-button.active {
-    background-color: #ffffff;
-    border-bottom: 1px solid #fff;
-    font-weight: bold;
-}
-.tab-content {
-    display: none;
-    padding-top: 5px;
-}
-.tab-content.active {
-    display: block;
-}
-.tab-content label {
-    display: block;
-    margin-top: 10px;
-    margin-bottom: 5px;
-    font-weight: bold;
-}
-/* 统一输入和选择框样式 */
-.tab-content textarea, .tab-content input[type="text"], .tab-content input[type="number"], .tab-content select {
-    width: 98%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-    font-size: 13px;
-    resize: vertical;
-}
-.model-config-section {
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: #fff;
-}
-.model-config-section h3 {
-    margin-top: 0;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 8px;
-    font-size: 15px;
-}
-.slider-container {
-    margin-top: 10px;
-}
-.slider-container input[type="range"] {
-    width: 100%;
-}
-.section-header {
-    font-size: 15px;
-    margin-top: 25px;
-    margin-bottom: 10px;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 5px;
+    gap: 10px;
+    background: white;
 }
 
-/* =================================================================== */
-/* 5. 决策过程 (思考链) 样式 【关键修改】*/
-/* =================================================================== */
+#user-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    resize: none;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    font-size: 14px;
+}
 
-/* 默认状态 (最小化)：无背景、无边框、无内边距 */
-.decision-process-message {
-    background: none;
+#user-input:focus {
+    border-color: var(--primary-color);
+}
+
+#send-btn {
+    padding: 0 24px;
+    background: var(--primary-color);
+    color: white;
     border: none;
-    box-shadow: none;
-    padding: 0;
-    max-width: 400px;
-    align-self: flex-start;
-    margin: 5px 0 5px 10px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 13px;
-    box-sizing: border-box;
-    word-wrap: break-word;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
 }
 
-/* 最小化状态下的可点击标题 */
-.decision-process-message .dp-header {
-    cursor: pointer;
-    font-size: 11px;
-    color: #555;
-    background-color: #f7f7f7;
-    padding: 3px 8px;
-    border-radius: 5px;
-    margin: 0;
-    display: inline-flex;
+#send-btn:hover { opacity: 0.9; }
+
+/* --- 4. 右侧配置面板 (新设计) --- */
+
+.section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    margin: 0 0 15px 0;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+}
+
+/* 开关网格布局 */
+.switch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 两列 */
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.switch-card {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 12px;
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: background-color 0.2s;
-}
-.decision-process-message .dp-header:hover {
-    background-color: #e9e9e9;
-}
-.decision-process-message .dp-toggle-icon {
-    font-weight: bold;
-    font-size: 10px;
-    margin-left: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid transparent;
+    transition: all 0.2s;
 }
 
-/* 展开状态 (is-expanded 类被 JS 添加) */
-.decision-process-message.is-expanded {
-    background-color: #fffaf0;
-    border-left: 4px solid #ffc107;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    padding: 5px 10px;
+.switch-card:hover {
+    border-color: #ddd;
+    transform: translateY(-1px);
 }
-.decision-process-message.is-expanded .dp-header {
-    background-color: #f0f0f0;
+
+.switch-info { display: flex; flex-direction: column; }
+.switch-name { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.switch-desc { font-size: 10px; color: var(--text-sub); margin-top: 3px; }
+
+/* Toggle Switch (iOS 风格) */
+.toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #E9E9EA;
+    transition: .3s;
+    border-radius: 24px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+input:checked + .slider { background-color: var(--success-color); } /* 开启变绿 */
+input:checked + .slider:before { transform: translateX(16px); }
+
+/* 导航 Tabs */
+.tab-container {
     display: flex;
+    background: #E5E5EA;
+    padding: 3px;
+    border-radius: 10px;
+    margin-bottom: 20px;
 }
 
-/* 展开内容的样式 */
-.decision-process-message .dp-content {
-    border-left: 3px solid #ccc;
-    padding-left: 10px;
-    margin-top: 5px;
+.tab-button {
+    flex: 1;
+    padding: 8px 0;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
     font-size: 12px;
+    font-weight: 500;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s;
 }
-.decision-process-message h4 {
-    margin: 10px 0 5px 0;
-    font-size: 13px;
-    color: #555;
-    font-weight: bold;
+
+.tab-button.active {
+    background: white;
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
 }
-.decision-process-message pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    background-color: #f9f9f9;
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    border: 1px solid #eee;
-    margin-top: 5px;
+
+.tab-content { display: none; animation: fadeIn 0.2s; }
+.tab-content.active { display: block; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
-.decision-process-message .dp-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 2px 10px;
+
+/* --- 5. 规则卡片样式 (Rule Cards) --- */
+
+.info-box {
+    background: #E8F2FF;
+    color: #004085;
+    padding: 12px;
+    border-radius: 8px;
     font-size: 12px;
-}
-.decision-process-message .dp-label {
-    font-weight: bold;
-    color: #666;
-}
-.decision-process-message .dp-value {
-    font-family: Consolas, 'Courier New', monospace;
-    color: #000;
-}
-/* 【新增】MCP 内容按钮样式 */
-.decision-process-message .mcp-content-btn {
-    font-size: 11px;
-    background-color: #e6f7ff;
-    border: 1px solid #91d5ff;
-    color: #0056b3;
-}
-/* 【新增】MCP 内容详情样式 */
-.decision-process-message .mcp-content-details {
-    background-color: #2d2d2d;
-    color: #f8f8f2;
-    padding: 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #444;
+    line-height: 1.4;
+    margin-bottom: 15px;
+    border: 1px solid #B8DAFF;
 }
 
-
-/* =================================================================== */
-/* 6. 策略库 和 决策规则库 样式 */
-/* =================================================================== */
-
-.strategy-list {
+.rule-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-left: 10px;
+    gap: 15px;
 }
 
-.add-strategy-btn {
-    background-color: #007bff;
-    color: white;
-    padding: 6px 12px;
+.rule-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid #eee;
+    position: relative;
+    border-left: 4px solid var(--primary-color);
+    transition: transform 0.2s;
+}
+
+.rule-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* 规则行 */
+.rule-row {
+    display: flex;
+    flex-direction: column; /* 默认垂直排列，适合长文本 */
+    margin-bottom: 12px;
+}
+
+/* 特殊：横向排列的行 (如情绪选择) */
+.rule-row.horizontal {
+    flex-direction: row;
+    align-items: center;
+}
+.rule-row.horizontal .rule-label {
+    width: 80px; /* 固定标签宽度 */
+    margin-bottom: 0;
+}
+
+.rule-label {
     font-size: 12px;
-    margin-top: 5px;
-    align-self: flex-start;
-}
-.add-strategy-btn:hover {
-    background-color: #0056b3;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin-bottom: 6px;
 }
 
-/* --- 【关键修复】决策规则库表格样式 --- */
-#decision-rules-container {
-    padding-left: 0; /* 移除 .strategy-list 的左侧填充 */
-}
-
-.rules-table {
+/* 规则输入框 (支持自动伸缩的 textarea) */
+textarea.rule-input, input.rule-input, select.rule-input {
     width: 100%;
-    border-collapse: collapse;
+    padding: 10px;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #FAFAFA;
+    outline: none;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.2s, background-color 0.2s;
+    resize: vertical; /* 允许垂直拉伸 */
+    min-height: 40px;
+}
+
+textarea.rule-input:focus, input.rule-input:focus, select.rule-input:focus {
+    background: white;
+    border-color: var(--primary-color);
+}
+
+/* 规则卡片右上角的删除按钮 */
+.rule-delete {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: var(--danger-color);
+    background: none;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    padding: 5px;
+}
+.rule-delete:hover { opacity: 1; }
+
+/* --- 6. 通用输入与按钮 --- */
+
+label {
+    display: block;
     font-size: 12px;
-    table-layout: fixed; /* 强制表格遵守宽度 */
+    font-weight: 600;
+    color: var(--text-main);
+    margin-top: 15px;
+    margin-bottom: 6px;
 }
 
-.rules-table th, .rules-table td {
-    border: 1px solid #ddd;
-    padding: 6px;
-    text-align: left;
-    vertical-align: middle; /* 垂直居中 */
-    word-break: break-word; /* 避免长单词撑开 */
-}
-
-.rules-table th {
-    background-color: #f8f9fa;
-    font-weight: bold;
-}
-
-/* 分配列宽 */
-.rules-table th:nth-child(1) { width: 15%; } /* 优先级 */
-.rules-table th:nth-child(2) { width: 25%; } /* 触发意图 */
-.rules-table th:nth-child(3) { width: 25%; } /* 触发情绪 */
-.rules-table th:nth-child(4) { width: 25%; } /* 策略键 */
-.rules-table th:nth-child(5) { width: 10%; } /* 操作 */
-
-.rules-table td {
+/* 基础设定 Tab 中的大文本框 */
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 13px;
     background-color: #fff;
+    color: #333;
+}
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
-/* 输入框填满单元格 */
-.rules-table input[type="number"], .rules-table input[type="text"] {
+/* 操作按钮 */
+.action-btn {
     width: 100%;
-    padding: 4px;
-    font-size: 12px;
-    border: 1px solid #ccc;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    background: #f2f2f2;
+}
+
+.action-btn.primary-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+.action-btn.primary-btn:hover {
+    background: #0062cc; /* 深蓝 */
+    opacity: 1;
+}
+
+/* --- 7. 工具列表样式 --- */
+.tool-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: white;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    border: 1px solid #eee;
+}
+
+.tool-info strong {
+    display: block;
+    font-size: 13px;
+    color: var(--text-main);
+    margin-bottom: 2px;
+}
+
+.tool-info small {
+    color: var(--text-sub);
+    font-size: 11px;
+}
+
+/* 滚动条美化 (Chrome/Safari) */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #ccc;
     border-radius: 3px;
-    box-sizing: border-box; /* 确保 padding 不会撑开宽度 */
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+/* --- 消息底部的时间统计栏 --- */
+.message-meta-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end; /* 靠右对齐 */
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0,0,0,0.05); /* 极淡的分割线 */
 }
 
-/* 优先级输入框可以小一点，但 100% 宽度更整齐 */
-.rules-table input.rule-priority {
-    width: 100%;
-}
-
-/* 操作按钮单元格 */
-.rules-table td:last-child {
-    text-align: center;
+/* 单个时间标签的基础样式 */
+.time-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: Consolas, monospace; /* 等宽字体，数字更整齐 */
+    display: inline-flex;
+    align-items: center;
     white-space: nowrap;
 }
 
-.rules-table .save-rule-btn {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 3px;
-    padding: 4px 8px;
-    font-size: 12px;
-    cursor: pointer;
-    margin-right: 5px; /* 按钮间距 */
+/* 1. 策略/意图分析 (紫色系) */
+.badge-strategy {
+    color: #6f42c1;
+    background-color: rgba(111, 66, 193, 0.1);
+    border: 1px solid rgba(111, 66, 193, 0.15);
 }
 
-.rules-table .delete-strategy-btn {
-    padding: 0;
-    width: 24px;
-    height: 24px;
-    line-height: 24px;
-    vertical-align: middle; /* 与保存按钮对齐 */
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
+/* 2. MCP 工具调用 (蓝色系) */
+.badge-mcp {
+    color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    border: 1px solid rgba(0, 123, 255, 0.15);
 }
-.rules-table .delete-strategy-btn:hover {
-    background-color: #c82333;
+
+/* 3. 总耗时 (绿色系，作为兜底) */
+.badge-total {
+    color: #198754;
+    background-color: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.15);
+    font-weight: 600;
+}
+
+/* 覆盖原有的样式，防止冲突 */
+.llm-time-meta {
+    display: none; /* 隐藏旧的时间显示 */
 }
