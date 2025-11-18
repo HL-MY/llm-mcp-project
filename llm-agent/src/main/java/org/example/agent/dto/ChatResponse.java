@@ -3,24 +3,28 @@ package org.example.agent.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * @author hull
- * @since 2025/9/25 10:27
+ * 【修改】
+ * 1. 添加 DecisionProcessInfo 字段。
+ * 2. 更新构造函数以接收新字段。
  */
-@JsonInclude(JsonInclude.Include.NON_NULL) // This annotation prevents sending null fields in the JSON response
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatResponse {
     private final String reply;
     private final UiState uiState;
-    private final ToolCallInfo toolCall; // New field for tool call info
+    private final ToolCallInfo toolCall;
+    private final DecisionProcessInfo decisionProcess; // <-- 【新增】
 
-    public ChatResponse(String reply, UiState uiState, ToolCallInfo toolCall) {
+    // 【修改】主构造函数
+    public ChatResponse(String reply, UiState uiState, ToolCallInfo toolCall, DecisionProcessInfo decisionProcess) {
         this.reply = reply;
         this.uiState = uiState;
         this.toolCall = toolCall;
+        this.decisionProcess = decisionProcess;
     }
 
-    // Overloaded constructor for backwards compatibility and for messages without tool calls
+    // 兼容的构造函数
     public ChatResponse(String reply, UiState uiState) {
-        this(reply, uiState, null);
+        this(reply, uiState, null, null);
     }
 
     public String getReply() {
@@ -33,5 +37,9 @@ public class ChatResponse {
 
     public ToolCallInfo getToolCall() {
         return toolCall;
+    }
+
+    public DecisionProcessInfo getDecisionProcess() { // <-- 【新增】
+        return decisionProcess;
     }
 }

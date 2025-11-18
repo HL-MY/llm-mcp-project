@@ -1,50 +1,32 @@
 package org.example.agent.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.Map;
 
+/**
+ * 【重大重构】
+ * 这个 DTO 现在只负责承载 "会话" 相关的UI状态 (左侧栏和开场白)。
+ * 所有的 "配置" 状态现在由 ConfigAdminController 独立管理。
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class UiState {
+
+    // 左侧栏：流程状态
     private final Map<String, String> processStatus;
+    // 左侧栏：人设预览
     private final String persona;
-    private final String rawPersonaTemplate;
+    // 聊天框：开场白 (仅在 / 和 /reset 时非 null)
     private final String openingMonologue;
-    private final String modelName;
-    private final Double temperature;
-    private final Double topP;
-    private final Integer maxTokens;
-
-    private final Double repetitionPenalty;
-    private final Double presencePenalty;
-    private final Double frequencyPenalty;
-
 
     // --- 构造函数已更新 ---
-    public UiState(Map<String, String> processStatus, String persona, String rawPersonaTemplate, String openingMonologue,
-                   String modelName, Double temperature, Double topP, Integer maxTokens,
-                   Double repetitionPenalty, Double presencePenalty, Double frequencyPenalty) {
+    public UiState(Map<String, String> processStatus, String persona, String openingMonologue) {
         this.processStatus = processStatus;
         this.persona = persona;
-        this.rawPersonaTemplate = rawPersonaTemplate;
         this.openingMonologue = openingMonologue;
-        this.modelName = modelName;
-        this.temperature = temperature;
-        this.topP = topP;
-        this.maxTokens = maxTokens;
-        this.repetitionPenalty = repetitionPenalty;
-        this.presencePenalty = presencePenalty;
-        this.frequencyPenalty = frequencyPenalty;
     }
 
     // --- Getters ---
     public Map<String, String> getProcessStatus() { return processStatus; }
     public String getPersona() { return persona; }
-    public String getRawPersonaTemplate() { return rawPersonaTemplate; }
     public String getOpeningMonologue() { return openingMonologue; }
-    public String getModelName() { return modelName; }
-    public Double getTemperature() { return temperature; }
-    public Double getTopP() { return topP; }
-    public Integer getMaxTokens() { return maxTokens; }
-    public Double getRepetitionPenalty() { return repetitionPenalty; }
-    public Double getPresencePenalty() { return presencePenalty; }
-    public Double getFrequencyPenalty() { return frequencyPenalty; }
-
 }

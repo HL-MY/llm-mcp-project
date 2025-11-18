@@ -1,182 +1,517 @@
-/* --- 基础和全局样式 --- */
+:root {
+    --primary-color: #007AFF; /* iOS 风格蓝 */
+    --bg-color: #F2F2F7;      /* 整体背景灰 */
+    --card-bg: #FFFFFF;       /* 卡片白 */
+    --text-main: #1C1C1E;     /*主要文字黑 */
+    --text-sub: #8E8E93;      /* 次要文字灰 */
+    --border-color: #E5E5EA;  /* 边框色 */
+    --danger-color: #FF3B30;  /* 删除/危险红 */
+    --success-color: #34C759; /* 成功绿 */
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f7f9; margin: 0; display: flex; justify-content: center;
-    align-items: center; height: 100vh; overflow: hidden;
-}
-h2 { font-size: 16px; color: #333; margin-top: 0; }
-/* --- 主容器 --- */
-.container {
-    display: flex; width: 95vw; max-width: 1600px; height: 90vh;
-    background-color: #fff; border-radius: 12px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1); overflow: hidden;
-}
-/* --- 三个主栏 --- */
-.preview-pane, .config-pane {
-    flex: 0 0 320px; background-color: #f8f9fa; padding: 20px;
-    display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
-}
-.chat-pane {
-    flex: 1 1 auto; display: flex; flex-direction: column;
-    border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0;
-}
-/* --- 侧边栏面板 --- */
-.status-panel, .persona-panel, .config-panel {
-    background-color: #ffffff; border-radius: 8px; padding: 15px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-.panel-header {
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;
-}
-.panel-header h2 { margin: 0; padding: 0; border: none; }
-/* --- 状态列表 --- */
-#process-status-list { list-style: none; padding: 0; margin: 0; }
-#process-status-list li {
-    display: flex; align-items: center; margin-bottom: 8px;
-    font-size: 14px; color: #555;
-}
-.status-completed, .status-pending {
-    width: 12px; height: 12px; border-radius: 50%;
-    margin-right: 10px; flex-shrink: 0;
-}
-.status-completed { background-color: #28a745; }
-.status-pending { background-color: #ffc107; }
-/* --- 人设预览 --- */
-.persona-panel p { font-size: 13px; line-height: 1.6; color: #666; word-wrap: break-word; }
-/* --- 配置面板 --- */
-.config-panel label {
-    display: block; font-size: 13px; font-weight: bold;
-    color: #333; margin-top: 10px; margin-bottom: 5px;
-}
-.config-panel textarea, .config-panel input[type="text"] {
-    width: 100%; padding: 8px; border: 1px solid #ccc;
-    border-radius: 4px; font-size: 13px; box-sizing: border-box;
-}
-.config-panel textarea { resize: vertical; }
-.section-header { margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; }
-/* --- 按钮 --- */
-button { border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
-#save-config-btn { width: 100%; background-color: #28a745; color: white; margin-top: 15px; padding: 8px 0; }
-#reset-btn { background-color: #6c757d; color: white; padding: 4px 12px; font-size: 12px; }
-#send-btn { background-color: #007bff; color: white; padding: 10px 20px; }
-#save-config-btn:hover { background-color: #218838; }
-#reset-btn:hover { background-color: #5a6268; }
-#send-btn:hover { background-color: #0056b3; }
-#send-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
-/* --- 聊天窗口 --- */
-.system-prompt-container {
-    padding: 10px 20px; background-color: #fffbe6; border-bottom: 1px solid #ffe58f;
-    text-align: center; font-size: 13px; color: #8a6d3b; transition: all 0.3s ease;
-}
-.system-prompt-container.hidden { display: none; }
-.system-prompt-container p { margin: 0; }
-.chat-window { flex-grow: 1; padding: 20px; overflow-y: auto; background-color: #ffffff; }
-.message { margin-bottom: 15px; max-width: 80%; padding: 10px 15px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
-.user-message { background-color: #007bff; color: white; margin-left: auto; border-bottom-right-radius: 4px; }
-.bot-message {
-    background-color: #e9ecef; color: #333; margin-right: auto;
-    border-bottom-left-radius: 4px; display: flex; flex-direction: column;
-}
-.response-time { display: block; font-size: 10px; color: #888; margin-top: 5px; align-self: flex-end; }
-.error-message { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-.message p {
+    background-color: var(--bg-color);
+    color: var(--text-main);
     margin: 0;
-    /* 【核心修复】增加此行样式，确保空格能被正确渲染 */
-    white-space: pre-wrap;
+    height: 100vh;
+    overflow: hidden; /* 防止 body 滚动 */
 }
-.chat-input-area { display: flex; padding: 20px; border-top: 1px solid #e0e0e0; background-color: #f8f9fa; }
-#user-input {
-    flex-grow: 1; border: 1px solid #ccc; border-radius: 8px;
-    padding: 10px; font-size: 14px; resize: none; margin-right: 10px;
-}
-.slider-container { margin-top: 15px; }
-.slider-container label { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 5px; }
-.slider-container input[type="range"] { width: 100%; cursor: pointer; }
 
-/* --- Tool Call Message --- */
-.tool-call-message {
-    background-color: #f0f4f8;
-    border-left: 4px solid #4a90e2;
+/* --- 1. 核心布局 (三栏) --- */
+.container {
+    display: flex;
+    height: 100%;
+    max-width: 1600px; /*在大屏幕上限制最大宽度 */
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
+}
+
+.preview-pane {
+    flex: 0 0 260px;
+    border-right: 1px solid var(--border-color);
+    padding: 20px;
+    background: #FAFAFA;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    position: relative;
+    min-width: 0; /* 防止 flex 子项溢出 */
+}
+
+.config-pane {
+    flex: 0 0 440px; /* 配置栏稍微宽一点 */
+    border-left: 1px solid var(--border-color);
+    padding: 20px;
+    background: #F9F9F9;
+    overflow-y: auto; /* 允许配置栏内部滚动 */
+}
+
+/* --- 2. 左侧状态栏 --- */
+.preview-pane h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 15px;
+}
+
+#process-status-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+}
+
+#process-status-list li {
+    padding: 8px 0;
+    border-bottom: 1px dashed #eee;
+    display: flex;
+    align-items: center;
+    color: #555;
+}
+
+.status-completed { color: var(--success-color); margin-right: 8px; font-size: 12px; }
+.status-pending { color: #FFCC00; margin-right: 8px; font-size: 12px; }
+
+/* --- 3. 中间聊天窗口 --- */
+.chat-window {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    line-height: 1.5;
+    font-size: 14px;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.bot-message {
+    background: #F2F2F7;
+    color: #000;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.user-message {
+    background: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.llm-time-meta {
+    font-size: 10px;
+    opacity: 0.6;
+    display: block;
+    text-align: right;
+    margin-top: 4px;
+    font-family: monospace;
+}
+
+/* 输入区域 */
+.chat-input-area {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 10px;
+    background: white;
+}
+
+#user-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    resize: none;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    font-size: 14px;
+}
+
+#user-input:focus {
+    border-color: var(--primary-color);
+}
+
+#send-btn {
+    padding: 0 24px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+#send-btn:hover { opacity: 0.9; }
+
+/* --- 4. 右侧配置面板 (新设计) --- */
+
+.section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    margin: 0 0 15px 0;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+}
+
+/* 开关网格布局 */
+.switch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 两列 */
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.switch-card {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.switch-card:hover {
+    border-color: #ddd;
+    transform: translateY(-1px);
+}
+
+.switch-info { display: flex; flex-direction: column; }
+.switch-name { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.switch-desc { font-size: 10px; color: var(--text-sub); margin-top: 3px; }
+
+/* Toggle Switch (iOS 风格) */
+.toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #E9E9EA;
+    transition: .3s;
+    border-radius: 24px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+input:checked + .slider { background-color: var(--success-color); } /* 开启变绿 */
+input:checked + .slider:before { transform: translateX(16px); }
+
+/* 导航 Tabs */
+.tab-container {
+    display: flex;
+    background: #E5E5EA;
+    padding: 3px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 8px 0;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-button.active {
+    background: white;
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+
+.tab-content { display: none; animation: fadeIn 0.2s; }
+.tab-content.active { display: block; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- 5. 规则卡片样式 (Rule Cards) --- */
+
+.info-box {
+    background: #E8F2FF;
+    color: #004085;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-bottom: 15px;
+    border: 1px solid #B8DAFF;
+}
+
+.rule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.rule-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid #eee;
+    position: relative;
+    border-left: 4px solid var(--primary-color);
+    transition: transform 0.2s;
+}
+
+.rule-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* 规则行 */
+.rule-row {
+    display: flex;
+    flex-direction: column; /* 默认垂直排列，适合长文本 */
+    margin-bottom: 12px;
+}
+
+/* 特殊：横向排列的行 (如情绪选择) */
+.rule-row.horizontal {
+    flex-direction: row;
+    align-items: center;
+}
+.rule-row.horizontal .rule-label {
+    width: 80px; /* 固定标签宽度 */
+    margin-bottom: 0;
+}
+
+.rule-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin-bottom: 6px;
+}
+
+/* 规则输入框 (支持自动伸缩的 textarea) */
+textarea.rule-input, input.rule-input, select.rule-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #FAFAFA;
+    outline: none;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.2s, background-color 0.2s;
+    resize: vertical; /* 允许垂直拉伸 */
+    min-height: 40px;
+}
+
+textarea.rule-input:focus, input.rule-input:focus, select.rule-input:focus {
+    background: white;
+    border-color: var(--primary-color);
+}
+
+/* 规则卡片右上角的删除按钮 */
+.rule-delete {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: var(--danger-color);
+    background: none;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    padding: 5px;
+}
+.rule-delete:hover { opacity: 1; }
+
+/* --- 6. 通用输入与按钮 --- */
+
+label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-top: 15px;
+    margin-bottom: 6px;
+}
+
+/* 基础设定 Tab 中的大文本框 */
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 13px;
+    background-color: #fff;
+    color: #333;
+}
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* 操作按钮 */
+.action-btn {
+    width: 100%;
     padding: 10px 15px;
     border-radius: 8px;
-    margin: 15px auto; /* Centered with margin */
-    font-family: Consolas, 'Courier New', monospace;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: var(--text-main);
     font-size: 13px;
-    max-width: 95%; /* Take up most of the width */
-    box-sizing: border-box;
-    word-wrap: break-word;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
 }
 
-.tool-call-message h3 {
-    margin: 0 0 10px 0;
-    font-size: 14px;
-    color: #333;
+.action-btn:hover {
+    background: #f2f2f2;
+}
+
+.action-btn.primary-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+.action-btn.primary-btn:hover {
+    background: #0062cc; /* 深蓝 */
+    opacity: 1;
+}
+
+/* --- 7. 工具列表样式 --- */
+.tool-item {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Use default font for header */
+    padding: 12px;
+    background: white;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    border: 1px solid #eee;
 }
 
-.tool-call-message h3 code {
-    background-color: #d4e3f3;
-    color: #1c3d5f;
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-left: 10px;
-    font-weight: bold;
-}
-
-.tool-call-message h4 {
-    margin: 15px 0 5px 0;
+.tool-info strong {
+    display: block;
     font-size: 13px;
-    color: #555;
-    font-weight: bold;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Use default font for sub-header */
+    color: var(--text-main);
+    margin-bottom: 2px;
 }
 
-.tool-call-message pre {
-    background-color: #ffffff;
-    border: 1px solid #d1dce5;
-    padding: 10px;
-    border-radius: 4px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
-}
-
-.tool-call-message code {
-    font-family: inherit;
-}
-
-/* --- 新增：工具调用时间明细样式 --- */
-.tool-time-details {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+.tool-info small {
+    color: var(--text-sub);
     font-size: 11px;
-    color: #555;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #d1dce5;
+}
+
+/* 滚动条美化 (Chrome/Safari) */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+/* --- 消息底部的时间统计栏 --- */
+.message-meta-container {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end; /* 靠右对齐 */
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0,0,0,0.05); /* 极淡的分割线 */
+}
+
+/* 单个时间标签的基础样式 */
+.time-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: Consolas, monospace; /* 等宽字体，数字更整齐 */
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap; /* 允许换行 */
+    white-space: nowrap;
 }
 
-.time-label {
-    color: #888;
+/* 1. 策略/意图分析 (紫色系) */
+.badge-strategy {
+    color: #6f42c1;
+    background-color: rgba(111, 66, 193, 0.1);
+    border: 1px solid rgba(111, 66, 193, 0.15);
 }
 
-.time-value {
-    font-weight: bold;
-    color: #333;
-    margin-left: 4px;
+/* 2. MCP 工具调用 (蓝色系) */
+.badge-mcp {
+    color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    border: 1px solid rgba(0, 123, 255, 0.15);
 }
 
-.time-separator {
-    margin: 0 6px;
-    color: #aaa;
+/* 3. 总耗时 (绿色系，作为兜底) */
+.badge-total {
+    color: #198754;
+    background-color: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.15);
+    font-weight: 600;
 }
 
-.time-value.total-time {
-    color: #28a745; /* 绿色突出显示总时间 */
+/* 覆盖原有的样式，防止冲突 */
+.llm-time-meta {
+    display: none; /* 隐藏旧的时间显示 */
 }
