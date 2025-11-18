@@ -99,6 +99,176 @@ public class TelecomToolFactory {
                 .build();
     }
 
+    public static ToolDefinition createGetOilPriceTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "province", ParameterProperty.builder()
+                        .type("string")
+                        .description("需要查询油价的省名称，例如: 广东，新疆、内蒙古")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(List.of("province"))
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getOilPrice")
+                .description("查询指定省份油价。")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    public static ToolDefinition createGetGoldPriceTool() {
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getGoldPrice")
+                .description("查询金价")
+                .parameters(null)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    public static ToolDefinition createGetNewsTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "areaName", ParameterProperty.builder()
+                        .type("string")
+                        .description("新闻的地区，例如: 广东，新疆、安徽")
+                        .build(),
+                "title", ParameterProperty.builder()
+                        .type("string")
+                        .description("新闻的标题")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(null)
+                .build();
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getNews")
+                .description("查询新闻")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+    public static ToolDefinition createGetExchangeRateTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "currency", ParameterProperty.builder()
+                        .type("string")
+                        .description("货币代码，例如: CNY，USD、JPY，KRW 等")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(null)
+                .build();
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getExchangeRate")
+                .description("查询汇率")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    public static ToolDefinition createGetFundInfoTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "fundCode", ParameterProperty.builder()
+                        .type("string")
+                        .description("基金代码，例如: 018124 ")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(List.of("fundCode"))
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getFundInfo")
+                .description("查询基金信息")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    public static ToolDefinition createGetCurrentTimeByCityTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "city", ParameterProperty.builder()
+                        .type("string")
+                        .description("城市，如：北京，广州，莫斯科，平壤 等")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(null)
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getCurrentTimeByCity")
+                .description("查询城市当前时间")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
+    public static ToolDefinition createGetStockInfoTool() {
+        Map<String, ParameterProperty> properties = Map.of(
+                "symbol", ParameterProperty.builder()
+                        .type("string")
+                        .description("股票代码，如：sh000001,sz000002,bj430047 等")
+                        .build()
+        );
+
+        ParameterSchema parameters = ParameterSchema.builder()
+                .type("object")
+                .properties(properties)
+                .required(List.of("symbol"))
+                .build();
+
+        FunctionDefinition function = FunctionDefinition.builder()
+                .name("getStockInfo")
+                .description("查询股票信息")
+                .parameters(parameters)
+                .build();
+
+        return ToolDefinition.builder()
+                .type("function")
+                .function(function)
+                .build();
+    }
+
     public static ToolDefinition createWebSearchTool() {
         Map<String, ParameterProperty> properties = Map.of(
                 "query", ParameterProperty.builder()
@@ -130,11 +300,30 @@ public class TelecomToolFactory {
     }
 
     public static Map<String, String> getAllToolDescriptions() {
-        return Map.of(
-                "compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription(),
-                "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription(),
-                "getWeather", "查询指定城市和日期的实时天气预报。",
-                "webSearch", "【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。"
+//        return Map.of(
+//                "compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription(),
+//                "queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription(),
+//                "getWeather", "查询指定城市和日期的实时天气预报。",
+//                "getOilPrice", "查询指定省份油价。",
+//                "getGoldPrice", "查询金价。",
+//                "getNews", "查询新闻。",
+//                "getExchangeRate", "查询汇率。",
+//                "getFundInfo", "查询基金信息。",
+//                "getCurrentTimeByCity", "查询城市当前时间。",
+//                "webSearch", "【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。"
+//        );
+        return Map.ofEntries(
+                Map.entry("compareTwoPlans", createCompareTwoPlansTool().getFunction().getDescription()),
+                Map.entry("queryMcpFaq", createQueryMcpFaqTool().getFunction().getDescription()),
+                Map.entry("getWeather", "查询指定城市和日期的实时天气预报。"),
+                Map.entry("getOilPrice", "查询指定省份油价。"),
+                Map.entry("getGoldPrice", "查询金价。"),
+                Map.entry("getNews", "查询新闻。"),
+                Map.entry("getExchangeRate", "查询汇率。"),
+                Map.entry("getFundInfo", "查询基金信息。"),
+                Map.entry("getCurrentTimeByCity", "查询城市当前时间。"),
+                Map.entry("getStockInfo", "查询股票信息。"),
+                Map.entry("webSearch", "【联网搜索工具】当用户询问实时信息、新闻、或你知识库中没有的外部信息时，调用此工具。")
         );
     }
 
@@ -143,6 +332,13 @@ public class TelecomToolFactory {
                 createCompareTwoPlansTool(),
                 createQueryMcpFaqTool(),
                 createGetWeatherTool(),
+                createGetOilPriceTool(),
+                createGetGoldPriceTool(),
+                createGetNewsTool(),
+                createGetExchangeRateTool(),
+                createGetFundInfoTool(),
+                createGetCurrentTimeByCityTool(),
+                createGetStockInfoTool(),
                 createWebSearchTool()
         );
     }

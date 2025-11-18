@@ -207,6 +207,12 @@ public class ChatService {
             String compareToolName = "compareTwoPlans";
             String faqToolName = "queryMcpFaq";
             String weatherToolName = "getWeather";
+            String oilToolName = "getOilPrice";
+            String goldToolName = "getGoldPrice";
+            String newsToolName = "getNews";
+            String exchangeRateToolName = "getExchangeRate";
+            String getFundInfoToolName = "getFundInfo";
+            String getCurrentTimeByCityName = "getCurrentTimeByCity";
             String webSearchToolName = "webSearch";
 
             // 如果意图是工具调用，但规则库为空，则手动创建指令（防止规则配置缺失）
@@ -217,6 +223,18 @@ public class ChatService {
                     strategyPrompt = "用户在问FAQ。请主动调用 queryMcpFaq 工具。";
                 } else if (finalIntent.equals("查询天气") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
                     strategyPrompt = "用户想查询天气。请主动调用 getWeather 工具。";
+                } else if (finalIntent.equals("查询油价") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(oilToolName))) {
+                    strategyPrompt = "用户想查询油价。请主动调用 getOilPrice 工具。";
+                } else if (finalIntent.equals("查询金价") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(goldToolName))) {
+                    strategyPrompt = "用户想查询金价。请主动调用 getGoldPrice 工具。";
+                }else if (finalIntent.equals("查询新闻") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(newsToolName))) {
+                    strategyPrompt = "用户想查询新闻。请主动调用 getNews 工具。";
+                }else if (finalIntent.equals("查询汇率") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(exchangeRateToolName))) {
+                    strategyPrompt = "用户想查询汇率。请主动调用 getExchangeRate 工具。";
+                }else if (finalIntent.equals("查询基金信息") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(getFundInfoToolName))) {
+                    strategyPrompt = "用户想查询基金信息。请主动调用 getFundInfoToolName 工具。";
+                }else if (finalIntent.equals("查询城市当前时间") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(getCurrentTimeByCityName))) {
+                    strategyPrompt = "用户想查询城市时间。请主动调用 getCurrentTimeByCityName 工具。";
                 } else if (finalIntent.equals("联网搜索") && toolsToUse.stream().anyMatch(t -> t.getFunction().getName().equals(webSearchToolName))) {
                     strategyPrompt = "用户想联网搜索。请主动调用 webSearch 工具。";
                 } else if ("意图不明".equals(finalIntent)) {
@@ -233,6 +251,24 @@ public class ChatService {
             }
             if (strategyPrompt.contains(weatherToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(weatherToolName))) {
                 strategyPrompt = "由于工具 " + weatherToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(oilToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(oilToolName))) {
+                strategyPrompt = "由于工具 " + oilToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(goldToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(goldToolName))) {
+                strategyPrompt = "由于工具 " + goldToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(newsToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(newsToolName))) {
+                strategyPrompt = "由于工具 " + newsToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(exchangeRateToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(exchangeRateToolName))) {
+                strategyPrompt = "由于工具 " + exchangeRateToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(getFundInfoToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(getFundInfoToolName))) {
+                strategyPrompt = "由于工具 " + getFundInfoToolName + " 已禁用，请直接用文本回复。";
+            }
+            if (strategyPrompt.contains(getCurrentTimeByCityName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(getCurrentTimeByCityName))) {
+                strategyPrompt = "由于工具 " + getCurrentTimeByCityName + " 已禁用，请直接用文本回复。";
             }
             if (strategyPrompt.contains(webSearchToolName) && toolsToUse.stream().noneMatch(t -> t.getFunction().getName().equals(webSearchToolName))) {
                 strategyPrompt = "由于工具 " + webSearchToolName + " 已禁用，请直接用文本回复。";
@@ -271,7 +307,7 @@ public class ChatService {
         // 检查LLM响应是否包含工具调用
         if (result.hasToolCalls()) {
             // 处理工具调用
-            return handleToolCalls(result, modelName, parameters, toolsToUse, llmFirstCallTime, this.lastDecisionProcess, persona);
+            return handleToolCalls(result, modelName, parameters, toolsToUse, llmFirstCallTime, this.lastDecisionProcess, persona,startTime);
         } else {
             finalContent = result.getContent();
         }
@@ -284,6 +320,7 @@ public class ChatService {
 
         // 将 LLM 响应耗时包装在 span 中
         String finalReply = finalContent + "<span class='llm-time-meta'>(LLM 响应耗时: " + responseTime + " 毫秒)</span>";
+        log.info("1111111111:{}",finalReply);
         return new ChatCompletion(finalReply, toolCallInfo, this.lastDecisionProcess, persona);
     }
 
@@ -385,7 +422,7 @@ public class ChatService {
      * 处理 LLM 返回的工具调用请求。
      */
     private ChatCompletion handleToolCalls(LlmResponse result, String modelName, Map<String, Object> parameters, List<ToolDefinition> tools,
-                                           long llmFirstCallTime, DecisionProcessInfo decisionProcessInfo, String personaUsedInFirstCall) {
+                                           long llmFirstCallTime, DecisionProcessInfo decisionProcessInfo, String personaUsedInFirstCall,long startTime) {
         LlmToolCall toolCall = result.getToolCalls().get(0);
         String toolName = toolCall.getToolName();
         String toolArgsString = toolCall.getArguments();
@@ -424,8 +461,13 @@ public class ChatService {
 
         log.info("【LLM工具调用后原始响应】\n{}", finalResult.getContent());
         processResponseKeywords(finalResult.getContent());
-
-        return new ChatCompletion(finalResult.getContent(), toolCallInfo, decisionProcessInfo, personaUsedInFirstCall);
+        long endTime = System.currentTimeMillis();
+        long responseTime = endTime - startTime;
+        // 将 LLM 响应耗时包装在 span 中
+        String finalReply = finalResult.getContent() + "<span class='llm-time-meta'>(LLM 响应耗时: " + responseTime + " 毫秒)</span>";
+        log.info("2222222222:{}",finalReply);
+        return new ChatCompletion(finalReply, toolCallInfo, decisionProcessInfo, personaUsedInFirstCall);
+//        return new ChatCompletion(finalResult.getContent(), toolCallInfo, decisionProcessInfo, personaUsedInFirstCall);
     }
 
     /**
@@ -472,12 +514,68 @@ public class ChatService {
                     String city = args.get("city").asText();
                     // date 是可选的
                     String date = args.has("date") ? args.get("date").asText() : "today";
-                    return toolService.getWeather(city, date);
+//                    return toolService.getWeather(city, date);
+                    return toolService.getWeather(city);
                 } catch (Exception e) {
                     log.error("解析 getWeather 参数(city, date)失败", e);
                     return "{\"error\": \"解析 'getWeather' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
                 }
-
+            case "getOilPrice":
+                try {
+                    String province = args.get("province").asText();
+                    return toolService.getOilPrice(province);
+                } catch (Exception e) {
+                    log.error("解析 getOilPrice 参数province失败", e);
+                    return "{\"error\": \"解析 'getOilPrice' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getGoldPrice":
+                try {
+                    return toolService.getGoldPrice();
+                } catch (Exception e) {
+                    return "{\"error\": \"解析 'getGoldPrice" +
+                            "' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getNews":
+                try {
+                    String areaName = args.get("areaName")==null?"":args.get("areaName").asText();
+                    String title = args.get("title")==null?"":args.get("title").asText();
+                    return toolService.getNews(areaName,title);
+                } catch (Exception e) {
+                    log.error("解析 getNews 参数失败", e);
+                    return "{\"error\": \"解析 'getNews' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getExchangeRate":
+                try {
+                    String currency = args.get("currency")==null?"":args.get("currency").asText();
+                    return toolService.getExchangeRate(currency);
+                } catch (Exception e) {
+                    log.error("解析 getExchangeRate 参数失败", e);
+                    return "{\"error\": \"解析 'getExchangeRate' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getFundInfo":
+                try {
+                    String fundCode = args.get("fundCode")==null?"":args.get("fundCode").asText();
+                    return toolService.getFundInfo(fundCode);
+                } catch (Exception e) {
+                    log.error("解析 getFundInfo 参数失败", e);
+                    return "{\"error\": \"解析 'getFundInfo' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getCurrentTimeByCity":
+                try {
+                    String city = args.get("city")==null?"":args.get("city").asText();
+                    return toolService.getCurrentTimeByCity(city);
+                } catch (Exception e) {
+                    log.error("解析 getCurrentTimeByCity 参数失败", e);
+                    return "{\"error\": \"解析 'getCurrentTimeByCity' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
+            case "getStockInfo":
+                try {
+                    String symbol = args.get("symbol")==null?"":args.get("symbol").asText();
+                    return toolService.getStockInfo(symbol);
+                } catch (Exception e) {
+                    log.error("解析 getStockInfo 参数失败", e);
+                    return "{\"error\": \"解析 'getStockInfo' 参数失败\", \"details\": \"" + e.getMessage() + "\"}";
+                }
             case "webSearch":
                 try {
                     String query = args.get("query").asText();
