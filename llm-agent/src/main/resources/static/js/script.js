@@ -167,9 +167,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }));
 
-        // 5. 保存流程 (单独的保存按钮)
+        // 5. 保存流程 (同时保存流程步骤和依赖)
         safeBind('save-workflow-btn', () => saveAndReload(async () => {
-            await api.saveSetting('processes', document.getElementById('processes-input').value);
+            await api.saveSettings({ // <-- 确保使用 saveSettings 批量保存
+                'processes': document.getElementById('processes-input').value,
+                'dependencies': document.getElementById('dependencies-input').value // <-- 新增依赖保存
+            });
         }));
     };
 
@@ -188,13 +191,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         div.querySelector('.rule-delete').onclick = async () => { if(confirm('删除?')) { if(rule.id>0) await api.delete(`/api/config/rules/${rule.id}`); div.remove(); }};
 
-        // 【关键修复】确保 POST 时不发送 id 字段
+        // 确保 POST 时不发送 id 字段
         div.querySelector('.save-rule-btn').onclick = async () => {
             const dataToSave = {
                 triggerIntent: div.querySelector('.intent-input').value,
                 triggerEmotion: div.querySelector('.emotion-input').value,
                 strategyKey: div.querySelector('.strategy-input').value,
-                priority: 100 // 假设默认优先级为100
+                priority: 100
             };
 
             try {
@@ -307,9 +310,10 @@ document.addEventListener('DOMContentLoaded', () => {
             setVal('persona-template-input', settings['persona_template']);
             setVal('opening-monologue-input', settings['opening_monologue']);
             setVal('safety-redlines-input', settings['safety_redlines']);
-            setVal('pre-processing-prompt-input', settings['pre_processing_prompt']); // 策略指令
-            setVal('router-processing-prompt-input', settings['router_processing_prompt']); // 路由指令
+            setVal('pre-processing-prompt-input', settings['pre_processing_prompt']);
+            setVal('router-processing-prompt-input', settings['router_processing_prompt']);
             setVal('processes-input', settings['processes']);
+            setVal('dependencies-input', settings['dependencies']); // <-- 新增加载依赖
 
             // 3. 模型参数回显
             const fillParams = (jsonStr, prefix) => {
@@ -330,8 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             fillParams(settings['main_model_params'], 'main');
-            fillParams(settings['pre_model_params'], 'pre'); // 策略模型
-            fillParams(settings['router_model_params'], 'router'); // 路由模型
+            fillParams(settings['pre_model_params'], 'pre');
+            fillParams(settings['router_model_params'], 'router');
 
         } catch (e) {
             console.error("❌ 加载配置失败:", e);

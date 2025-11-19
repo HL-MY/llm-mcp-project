@@ -204,10 +204,14 @@
 
         <div id="workflow-tab" class="tab-content">
             <div class="info-box">
-                💡 <strong>SOP 构建：</strong> 定义业务的标准流转步骤。
+                💡 <strong>SOP 构建：：</strong> 定义业务的标准流转步骤。
             </div>
             <label>流程步骤定义</label>
             <textarea id="processes-input" rows="12" placeholder="1. 询问客户需求..."></textarea>
+
+            <label>流程依赖定义 (Process Dependencies)</label>
+            <textarea id="dependencies-input" rows="4" placeholder="例如: 3.介绍业务 -> 2.确认身份, 5.结束对话 -> 4.其他帮助"></textarea>
+
             <button id="save-workflow-btn" class="action-btn">💾 保存流程</button>
         </div>
 

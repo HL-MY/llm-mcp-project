@@ -135,10 +135,12 @@ public class ChatService {
         }
         silentCount = 0;
 
-        // 流程完成检查 (仅当工作流开启时)
-        if (enableWorkflow && getAvailableProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
-            String defaultPersona = buildDynamicPersona("1", null, null, true);
-            return new ChatCompletion("🎉 恭喜！所有流程均已完成！", null, null, defaultPersona);
+        // 【流程完成检查修正】只有当流程启用，且总流程列表不为空，且未完成列表为空时，才报告完成。
+        if (enableWorkflow) {
+            if (!processManager.getAllProcesses().isEmpty() && processManager.getUnfinishedProcesses().isEmpty()) {
+                String defaultPersona = buildDynamicPersona("1", null, null, true);
+                return new ChatCompletion("🎉 恭喜！所有流程均已完成！", null, null, defaultPersona);
+            }
         }
 
         String persona;
