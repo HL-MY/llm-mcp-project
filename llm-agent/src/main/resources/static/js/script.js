@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await func();
                 alert('✅ 保存成功');
                 // 保存后重新加载配置，确保显示最新值
-                // await loadConfiguration();
+                await loadConfiguration(); // 重新加载以确保页面显示最新值
             } catch(e) {
                 alert('❌ 保存失败: ' + e.message);
             }
@@ -120,36 +120,54 @@ document.addEventListener('DOMContentLoaded', () => {
             else console.warn(`按钮未找到: ${id}`);
         };
 
+        // 1. 保存主模型参数和人设
         safeBind('save-main-model-btn', () => saveAndReload(async () => {
+            // 1.1 保存模型参数
             await api.saveModelParams('main_model_params', {
                 modelName: document.getElementById('main-model-name-input').value,
                 temperature: parseFloat(document.getElementById('main-temperature-input').value),
                 topP: parseFloat(document.getElementById('main-top-p-input').value),
                 maxTokens: parseInt(document.getElementById('main-max-tokens-input').value)
             });
+            // 1.2 保存人设文本
+            await api.saveSetting('persona_template', document.getElementById('persona-template-input').value);
         }));
 
+        // 2. 保存策略模型参数和策略指令
         safeBind('save-pre-model-btn', () => saveAndReload(async () => {
+            // 2.1 保存模型参数
             await api.saveModelParams('pre_model_params', {
                 modelName: document.getElementById('pre-model-name-input').value,
                 temperature: parseFloat(document.getElementById('pre-temperature-input').value),
                 topP: parseFloat(document.getElementById('pre-top-p-input').value),
                 maxTokens: parseInt(document.getElementById('pre-max-tokens-input').value)
             });
+            // 2.2 保存策略指令文本
+            await api.saveSetting('pre_processing_prompt', document.getElementById('pre-processing-prompt-input').value);
         }));
 
-        safeBind('save-main-config-btn', () => saveAndReload(async () => {
-            await api.saveSetting('persona_template', document.getElementById('persona-template-input').value);
+        // 3. 保存路由模型参数和路由指令
+        safeBind('save-router-model-btn', () => saveAndReload(async () => {
+            // 3.1 保存模型参数
+            await api.saveModelParams('router_model_params', {
+                modelName: document.getElementById('router-model-name-input').value,
+                temperature: parseFloat(document.getElementById('router-temperature-input').value),
+                topP: parseFloat(document.getElementById('router-top-p-input').value),
+                maxTokens: parseInt(document.getElementById('router-max-tokens-input').value)
+            });
+            // 3.2 保存路由指令文本
+            await api.saveSetting('router_processing_prompt', document.getElementById('router-processing-prompt-input').value);
+        }));
+
+        // 4. 保存通用全局设定 (开场白和红线)
+        safeBind('save-global-config-btn', () => saveAndReload(async () => {
             await api.saveSettings({
                 'opening_monologue': document.getElementById('opening-monologue-input').value,
                 'safety_redlines': document.getElementById('safety-redlines-input').value
             });
         }));
 
-        safeBind('save-pre-prompt-btn', () => saveAndReload(async () => {
-            await api.saveSetting('pre_processing_prompt', document.getElementById('pre-processing-prompt-input').value);
-        }));
-
+        // 5. 保存流程 (单独的保存按钮)
         safeBind('save-workflow-btn', () => saveAndReload(async () => {
             await api.saveSetting('processes', document.getElementById('processes-input').value);
         }));
@@ -268,7 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
             setVal('persona-template-input', settings['persona_template']);
             setVal('opening-monologue-input', settings['opening_monologue']);
             setVal('safety-redlines-input', settings['safety_redlines']);
-            setVal('pre-processing-prompt-input', settings['pre_processing_prompt']);
+            setVal('pre-processing-prompt-input', settings['pre_processing_prompt']); // 策略指令
+            setVal('router-processing-prompt-input', settings['router_processing_prompt']); // 路由指令
             setVal('processes-input', settings['processes']);
 
             // 3. 模型参数回显
@@ -290,7 +309,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             fillParams(settings['main_model_params'], 'main');
-            fillParams(settings['pre_model_params'], 'pre');
+            fillParams(settings['pre_model_params'], 'pre'); // 策略模型
+            fillParams(settings['router_model_params'], 'router'); // 路由模型
 
         } catch (e) {
             console.error("❌ 加载配置失败:", e);
@@ -305,6 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setupSlider('main-top-p-input', 'main-top-p-value');
         setupSlider('pre-temperature-input', 'pre-temperature-value');
         setupSlider('pre-top-p-input', 'pre-top-p-value');
+        setupSlider('router-temperature-input', 'router-temperature-value');
+        setupSlider('router-top-p-input', 'router-top-p-value');
 
         // 绑定常规按钮
         const bind = (id, fn) => {

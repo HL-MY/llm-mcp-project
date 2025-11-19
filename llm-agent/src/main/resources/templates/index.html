@@ -126,7 +126,7 @@
             </div>
 
             <div class="rule-card" id="pre-model-config" style="background: #fff; border-left: 4px solid #34C759; margin-top:15px;">
-                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">⚡ 路由小模型 (Router Agent)</div>
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">🧠 策略小模型 (Strategy Agent)</div>
 
                 <div class="rule-row">
                     <select id="pre-model-name-input" class="rule-input model-select-list"></select>
@@ -147,11 +147,40 @@
                 </div>
 
                 <div class="rule-row" style="flex-direction:column; margin-top:15px;">
-                    <span class="rule-label">路由指令 (Router Prompt)</span>
-                    <textarea id="pre-processing-prompt-input" rows="4" placeholder="定义意图分析和工具分发逻辑..."></textarea>
+                    <span class="rule-label">策略指令 (Strategy Prompt)</span>
+                    <textarea id="pre-processing-prompt-input" rows="4" placeholder="定义意图、情绪和敏感词分析逻辑..."></textarea>
                 </div>
 
-                <button id="save-pre-model-btn" class="action-btn">💾 保存小模型配置</button>
+                <button id="save-pre-model-btn" class="action-btn">💾 保存策略模型配置</button>
+            </div>
+
+            <div class="rule-card" id="router-model-config" style="background: #fff; border-left: 4px solid #FF9500; margin-top:15px;">
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">⚡ 路由小模型 (Router Agent)</div>
+
+                <div class="rule-row">
+                    <select id="router-model-name-input" class="rule-input model-select-list"></select>
+                </div>
+                <div class="switch-grid" style="margin-bottom:10px; gap:10px;">
+                    <div>
+                        <span class="rule-label">温度: <span id="router-temperature-value">0.1</span></span>
+                        <input type="range" id="router-temperature-input" min="0" max="2" step="0.1" value="0.1" style="width:100%">
+                    </div>
+                    <div>
+                        <span class="rule-label">Top P: <span id="router-top-p-value">0.7</span></span>
+                        <input type="range" id="router-top-p-input" min="0.1" max="1" step="0.1" value="0.7" style="width:100%">
+                    </div>
+                </div>
+                <div class="rule-row">
+                    <span class="rule-label" style="width:auto; margin-right:10px;">Max Tokens:</span>
+                    <input type="number" id="router-max-tokens-input" class="rule-input" style="flex:1;" value="512">
+                </div>
+
+                <div class="rule-row" style="flex-direction:column; margin-top:15px;">
+                    <span class="rule-label">路由指令 (Router Prompt)</span>
+                    <textarea id="router-processing-prompt-input" rows="4" placeholder="定义工具分发和直连逻辑..."></textarea>
+                </div>
+
+                <button id="save-router-model-btn" class="action-btn">💾 保存路由模型配置</button>
             </div>
 
             <hr style="border:0; border-top:1px dashed #eee; margin:25px 0;">

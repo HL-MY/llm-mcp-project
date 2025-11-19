@@ -1,5 +1,6 @@
 package org.example.agent.config;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import jakarta.annotation.PostConstruct;
 import org.example.agent.db.entity.GlobalSetting;
 import org.example.agent.db.mapper.GlobalSettingMapper;
@@ -61,9 +62,9 @@ public class DataInitializer {
                 """;
         initSetting(ConfigService.KEY_PROCESSES, defaultProcess);
 
-        // 5. 初始化路由小模型 Prompt
-        String defaultRouterPrompt = """
-                你是一个智能意图分析与路由助手。你的任务是分析用户输入，并判断是否可以通过调用简单工具直接解决。
+        // 5. 初始化【策略/意图分析小模型】 Prompt (KEY_PRE_PROMPT)
+        String defaultPrePrompt = """
+                你是一个智能意图分析助手。你的任务是分析用户输入的核心意图、情绪和敏感词。
                 请严格遵守以下规则，并只输出 JSON 格式结果。
                 
                 ### 1. 分析目标
@@ -71,28 +72,47 @@ public class DataInitializer {
                 - emotion: 用户情绪 (高兴, 生气, 困惑, 中性)。
                 - is_sensitive: 是否包含辱骂、色情等敏感词 (true/false)。
                 
+                【注意】你不需要做工具调用判断，那是另一个模型的工作。
+                
+                请分析下面的输入：
+                """;
+        initSetting(ConfigService.KEY_PRE_PROMPT, defaultPrePrompt);
+
+        // 6. 初始化【工具路由小模型】 Prompt (KEY_ROUTER_PROMPT)
+        String defaultRouterPrompt = """
+                你是一个高速工具路由助手。你的任务是判断用户是否可以直接通过调用工具解决问题，并给出调用指令。
+                请严格遵守以下规则，并只输出 JSON 格式结果。
+                
+                ### 1. 任务目标
+                - tool_name: 匹配到的工具名称。如果没有匹配到，则留空 ""。
+                - tool_args: 对应工具所需的参数（JSON字符串形式）。
+                
                 ### 2. 高速工具通道 (Fast Track)
                 仅当用户意图匹配以下【简单数据查询】工具时，才在 "tool_name" 和 "tool_args" 生成指令。
                 【支持的高速工具】: getWeather, getOilPrice, getGoldPrice, getExchangeRate, getCurrentTimeByCity, getStockInfo。
                 
                 【绝对禁止】(必须留空 tool_name，交给主模型):
-                - ❌ queryMcpFaq, webSearch, compareTwoPlans -> 留空！
+                - ❌ compareTwoPlans, queryMcpFaq, webSearch -> 留空！
                 
                 请分析下面的输入：
                 """;
-        initSetting(ConfigService.KEY_PRE_PROMPT, defaultRouterPrompt);
+        initSetting(ConfigService.KEY_ROUTER_PROMPT, defaultRouterPrompt);
 
-        // 6. 初始化模型参数
+
+        // 7. 初始化模型参数
         initSetting(ConfigService.KEY_MAIN_MODEL, "{\"modelName\":\"qwen3-next-80b-a3b-instruct\",\"temperature\":0.7,\"topP\":0.8,\"maxTokens\":2048}");
+        // 策略模型 (低配，注重稳定性)
         initSetting(ConfigService.KEY_PRE_MODEL, "{\"modelName\":\"qwen-turbo\",\"temperature\":0.1,\"topP\":0.7,\"maxTokens\":512}");
+        // 路由模型 (低配，注重速度)
+        initSetting(ConfigService.KEY_ROUTER_MODEL, "{\"modelName\":\"qwen-turbo\",\"temperature\":0.1,\"topP\":0.7,\"maxTokens\":512}");
 
-        // 7. 初始化开关
+        // 8. 初始化开关
         initSetting(ConfigService.KEY_ENABLE_WORKFLOW, "true");
         initSetting(ConfigService.KEY_ENABLE_STRATEGY, "true");
         initSetting(ConfigService.KEY_ENABLE_MCP, "true");
         initSetting(ConfigService.KEY_ENABLE_EMOTION, "true");
 
-        // 8. 初始化工具开关 (默认全开，方便测试)
+        // 9. 初始化工具开关 (默认全开，方便测试)
         String[] tools = {"compareTwoPlans", "queryMcpFaq", "getWeather", "getOilPrice", "getGoldPrice", "getNews", "getExchangeRate", "getFundInfo", "getCurrentTimeByCity", "getStockInfo", "webSearch"};
         for (String tool : tools) {
             initSetting("enable_tool_" + tool, "true");
@@ -102,7 +122,10 @@ public class DataInitializer {
     }
 
     private void initSetting(String key, String defaultValue) {
-        GlobalSetting setting = globalSettingMapper.selectById(key);
+        QueryWrapper<GlobalSetting> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("setting_key", key);
+        GlobalSetting setting = globalSettingMapper.selectOne(queryWrapper);
+
         if (setting == null) {
             setting = new GlobalSetting();
             setting.setSettingKey(key);

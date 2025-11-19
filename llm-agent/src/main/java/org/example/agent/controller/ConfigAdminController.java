@@ -10,6 +10,7 @@ import org.example.agent.service.ConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+// import org.springframework.transaction.annotation.Transactional; // <-- 彻底移除此引用
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/config")
 public class ConfigAdminController {
 
-    private static final Logger log = LoggerFactory.getLogger(ConfigAdminController.class); // 引入 Logger
+    private static final Logger log = LoggerFactory.getLogger(ConfigAdminController.class);
 
     private final ConfigService configService;
     private final ObjectMapper objectMapper;
@@ -36,16 +37,14 @@ public class ConfigAdminController {
 
     @GetMapping("/global-settings")
     public ResponseEntity<Map<String, String>> getAllGlobalSettings() {
-        // 【关键修改】添加日志，证明前端确实发起了请求
         log.info("收到前端请求: 获取所有全局配置 (GET /api/config/global-settings)");
-
         Map<String, String> settings = configService.getAllGlobalSettings();
-
         log.info("数据库查询完毕，共返回 {} 条配置项", settings.size());
         return ResponseEntity.ok(settings);
     }
 
     @PutMapping("/global-settings")
+    // @Transactional // <-- 彻底移除
     public ResponseEntity<Void> saveGlobalSettings(@RequestBody Map<String, String> settings) {
         log.info("收到保存配置请求: {}", settings.keySet());
         configService.saveGlobalSettings(settings);
@@ -53,11 +52,14 @@ public class ConfigAdminController {
     }
 
     @PutMapping("/global-settings/model/{key}")
+    // @Transactional // <-- 彻底移除
     public ResponseEntity<Void> saveModelParameters(
             @PathVariable String key,
             @RequestBody ModelParameters params) throws Exception {
         log.info("收到保存模型参数请求: key={}", key);
-        if (!ConfigService.KEY_MAIN_MODEL.equals(key) && !ConfigService.KEY_PRE_MODEL.equals(key)) {
+        if (!ConfigService.KEY_MAIN_MODEL.equals(key)
+                && !ConfigService.KEY_PRE_MODEL.equals(key)
+                && !ConfigService.KEY_ROUTER_MODEL.equals(key)) {
             return ResponseEntity.badRequest().build();
         }
         String jsonValue = objectMapper.writeValueAsString(params);
@@ -65,7 +67,35 @@ public class ConfigAdminController {
         return ResponseEntity.ok().build();
     }
 
-    // ... (保留 Strategy, Rules, Tools 的 API，逻辑不变) ...
+    // --- Decision Rule 规则保存修复 (全部移除 @Transactional) ---
+
+    @GetMapping("/rules")
+    public ResponseEntity<List<DecisionRule>> getAllRules() { return ResponseEntity.ok(decisionRuleMapper.selectList(null)); }
+
+    @PostMapping("/rules")
+    // @Transactional // <-- 彻底移除
+    public ResponseEntity<DecisionRule> createRule(@RequestBody DecisionRule rule) {
+        rule.setId(null);
+        decisionRuleMapper.insert(rule);
+        return ResponseEntity.ok(rule);
+    }
+
+    @PutMapping("/rules/{id}")
+    // @Transactional // <-- 彻底移除
+    public ResponseEntity<DecisionRule> updateRule(@PathVariable("id") Integer id, @RequestBody DecisionRule rule) {
+        rule.setId(id);
+        decisionRuleMapper.updateById(rule);
+        return ResponseEntity.ok(rule);
+    }
+
+    @DeleteMapping("/rules/{id}")
+    // @Transactional // <-- 彻底移除
+    public ResponseEntity<Void> deleteRule(@PathVariable("id") Integer id) {
+        decisionRuleMapper.deleteById(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // --- Strategy Methods (保持不变，因为 Service 层已移除 @Transactional) ---
 
     @GetMapping("/strategies")
     public ResponseEntity<List<Strategy>> getAllStrategies() { return ResponseEntity.ok(configService.getAllStrategies()); }
@@ -85,28 +115,7 @@ public class ConfigAdminController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/rules")
-    public ResponseEntity<List<DecisionRule>> getAllRules() { return ResponseEntity.ok(decisionRuleMapper.selectList(null)); }
-
-    @PostMapping("/rules")
-    public ResponseEntity<DecisionRule> createRule(@RequestBody DecisionRule rule) {
-        rule.setId(null);
-        decisionRuleMapper.insert(rule);
-        return ResponseEntity.ok(rule);
-    }
-
-    @PutMapping("/rules/{id}")
-    public ResponseEntity<DecisionRule> updateRule(@PathVariable("id") Integer id, @RequestBody DecisionRule rule) {
-        rule.setId(id);
-        decisionRuleMapper.updateById(rule);
-        return ResponseEntity.ok(rule);
-    }
-
-    @DeleteMapping("/rules/{id}")
-    public ResponseEntity<Void> deleteRule(@PathVariable("id") Integer id) {
-        decisionRuleMapper.deleteById(id);
-        return ResponseEntity.ok().build();
-    }
+    // --- Tool Methods (保持不变) ---
 
     @GetMapping("/tools")
     public ResponseEntity<List<ToolStatus>> getAllToolsStatus() {

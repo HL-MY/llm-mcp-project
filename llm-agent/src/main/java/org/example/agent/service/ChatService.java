@@ -97,7 +97,6 @@ public class ChatService {
         boolean enableWorkflow = configService.getEnableWorkflow();
         boolean enableStrategy = configService.getEnableStrategy(); // 控制规则/情绪/敏感词
         boolean enableMcp = configService.getEnableMcp();           // 控制工具/高速通道
-        // enableEmotion 在 preProcessInput 内部使用
 
         // 1. --- 手动回复检查 (打断、空格) ---
         boolean isInterrupted = userMessage != null && userMessage.contains("打断");
@@ -145,95 +144,122 @@ public class ChatService {
         String persona;
         List<ToolDefinition> toolsToUse = Collections.emptyList();
         this.lastDecisionProcess = new DecisionProcessInfo();
-        PreProcessingResult preResult = null;
+        PreProcessingResult strategyResult = new PreProcessingResult();
+        PreProcessingResult routerResult = new PreProcessingResult();
+
 
         // 2. --- 智能大脑 (预处理) ---
-        // 只要开启了“策略”或者“MCP”，我们就启动小模型进行分析
-        // 策略开启 -> 为了匹配规则/敏感词
-        // MCP开启  -> 为了尝试“高速通道”路由
-        if (enableStrategy || enableMcp) {
+
+        // 2.1 [策略预处理] (只要策略开启，就分析意图/情绪/敏感词)
+        if (enableStrategy) {
             long preStartTime = System.currentTimeMillis();
-            preResult = preProcessInput(userMessage, this.lastDecisionProcess);
+            strategyResult = runStrategyPreProcess(userMessage, this.lastDecisionProcess);
             this.lastDecisionProcess.setPreProcessingTimeMs(System.currentTimeMillis() - preStartTime);
-            log.info("预处理结果: Intent={}, Tool={}, StrategyEnabled={}, McpEnabled={}",
-                    preResult.getIntent(), preResult.getToolName(), enableStrategy, enableMcp);
+            log.info("策略预处理结果: Intent={}, Emotion={}, Sensitive={}",
+                    strategyResult.getIntent(), strategyResult.getEmotion(), strategyResult.isSensitive());
+        } else {
+            // 记录策略未启用
+            this.lastDecisionProcess.setDetectedIntent("策略未启用");
         }
+
 
         // 3. --- 分支逻辑处理 ---
 
-        // 3.1 [敏感词拦截] (仅当策略开启时生效)
-        if (enableStrategy && preResult != null && preResult.isSensitive()) {
+        // 3.1 [敏感词拦截] (仅当策略开启且敏感词触发时生效)
+        if (enableStrategy && strategyResult.isSensitive()) {
             this.lastDecisionProcess.setSelectedStrategy("敏感词兜底");
             long totalTime = System.currentTimeMillis() - startTime;
+            long strategyTime = (this.lastDecisionProcess.getPreProcessingTimeMs() != null) ? this.lastDecisionProcess.getPreProcessingTimeMs() : 0;
             String sensitiveReply = configService.getSensitiveResponse() +
-                    buildTimeBadges(this.lastDecisionProcess.getPreProcessingTimeMs(), 0, totalTime);
+                    buildTimeBadges(strategyTime, 0, totalTime);
 
             return new ChatCompletion(sensitiveReply, null, this.lastDecisionProcess,
                     buildDynamicPersona("1", null, null, enableWorkflow));
         }
 
-        // 3.2 [高速通道 / 极速MCP] (仅当MCP开启，且小模型识别出明确工具时生效)
-        if (enableMcp && preResult != null && preResult.hasDirectToolCall()) {
-            log.info("🚀 触发高速通道: 小模型直接指派工具 [{}]", preResult.getToolName());
+        // 3.2 [工具路由预处理] (仅当MCP开启时，运行 Router Model 尝试高速通道)
+        if (enableMcp) {
+            long routerStartTime = System.currentTimeMillis();
+            routerResult = runMcpRouterProcess(userMessage, this.lastDecisionProcess);
+            long routerTime = System.currentTimeMillis() - routerStartTime;
 
-            long toolStart = System.currentTimeMillis();
-            JsonNode argsNode;
-            try {
-                argsNode = objectMapper.readTree(preResult.getToolArgs());
-            } catch (Exception e) {
-                log.error("高速通道参数解析失败", e);
-                argsNode = objectMapper.createObjectNode();
-            }
-
-            String toolResultJson = executeTool(preResult.getToolName(), argsNode);
-            long toolExecTime = System.currentTimeMillis() - toolStart;
-
-            // 欺骗主模型直接总结 (减少Token，提升速度)
-            String summaryPrompt = "用户意图需要调用工具 '" + preResult.getToolName() + "'。\n" +
-                    "工具执行结果如下：\n" + toolResultJson + "\n\n" +
-                    "请根据上述数据，用亲切、专业的口吻回答用户的问题。";
-
-            String fastTrackPersona = buildDynamicPersona("1", null, preResult.getIntent(), enableWorkflow) +
-                    "\n\n【关键数据】\n" + summaryPrompt;
-
-            long llmStart = System.currentTimeMillis();
-
-            // 调用主模型 (只生成文本，不挂载工具)
-            ModelParameters mainParams = configService.getModelParams(ConfigService.KEY_MAIN_MODEL);
-            LlmResponse finalRes = getLlmService(mainParams.getModelName()).chat(
-                    getSessionId(),
-                    userMessage,
-                    mainParams.getModelName(),
-                    fastTrackPersona,
-                    null, // 不再需要开场白
-                    mainParams.getParametersAsMap(),
-                    null  // 不传 tools，防止主模型再次尝试调用
+            // 累加预处理时间 (如果策略启用了，就加上策略时间)
+            Long currentPreTime = this.lastDecisionProcess.getPreProcessingTimeMs();
+            this.lastDecisionProcess.setPreProcessingTimeMs(
+                    currentPreTime != null ? currentPreTime + routerTime : routerTime
             );
-            long llmTime = System.currentTimeMillis() - llmStart;
 
-            // 构造返回结果
-            long totalTime = System.currentTimeMillis() - startTime;
-            ToolCallInfo fastToolInfo = new ToolCallInfo(preResult.getToolName(), preResult.getToolArgs(), toolResultJson, toolExecTime, 0L, llmTime);
+            log.info("路由预处理结果: ToolName={}, ToolArgs={}",
+                    routerResult.getToolName(), routerResult.getToolArgs());
 
-            // 高速通道特殊标记 + 时间标签
-            String finalReply = finalRes.getContent() +
-                    buildTimeBadges(this.lastDecisionProcess.getPreProcessingTimeMs(), toolExecTime, totalTime) +
-                    " <span style='font-size:10px; color:#ff9800;'>(极速模式)</span>";
+            // 检查是否触发高速通道
+            if (routerResult.hasDirectToolCall()) {
+                log.info("🚀 触发高速通道: 路由模型直接指派工具 [{}]", routerResult.getToolName());
 
-            return new ChatCompletion(finalReply, fastToolInfo, this.lastDecisionProcess, fastTrackPersona);
+                long toolStart = System.currentTimeMillis();
+                JsonNode argsNode;
+                try {
+                    // 使用 routerResult 的 toolArgs
+                    argsNode = objectMapper.readTree(routerResult.getToolArgs());
+                } catch (Exception e) {
+                    log.error("高速通道参数解析失败", e);
+                    argsNode = objectMapper.createObjectNode();
+                }
+
+                String toolResultJson = executeTool(routerResult.getToolName(), argsNode);
+                long toolExecTime = System.currentTimeMillis() - toolStart;
+
+                // 欺骗主模型直接总结 (减少Token，提升速度)
+                String summaryPrompt = "用户意图需要调用工具 '" + routerResult.getToolName() + "'。\n" +
+                        "工具执行结果如下：\n" + toolResultJson + "\n\n" +
+                        "请根据上述数据，用亲切、专业的口吻回答用户的问题。";
+
+                // 使用 strategyResult 的 intent (如果策略开启)
+                String intentForPersona = enableStrategy ? strategyResult.getIntent() : null;
+                String fastTrackPersona = buildDynamicPersona("1", null, intentForPersona, enableWorkflow) +
+                        "\n\n【关键数据】\n" + summaryPrompt;
+
+                long llmStart = System.currentTimeMillis();
+
+                // 调用主模型 (只生成文本，不挂载工具)
+                ModelParameters mainParams = configService.getModelParams(ConfigService.KEY_MAIN_MODEL);
+                LlmResponse finalRes = getLlmService(mainParams.getModelName()).chat(
+                        getSessionId(),
+                        userMessage,
+                        mainParams.getModelName(),
+                        fastTrackPersona,
+                        null,
+                        mainParams.getParametersAsMap(),
+                        null  // 不传 tools
+                );
+                long llmTime = System.currentTimeMillis() - llmStart;
+
+                // 构造返回结果
+                long totalTime = System.currentTimeMillis() - startTime;
+                ToolCallInfo fastToolInfo = new ToolCallInfo(routerResult.getToolName(), routerResult.getToolArgs(), toolResultJson, toolExecTime, 0L, llmTime);
+
+                long strategyTime = (this.lastDecisionProcess.getPreProcessingTimeMs() != null) ? this.lastDecisionProcess.getPreProcessingTimeMs() : 0;
+
+                // 高速通道特殊标记 + 时间标签
+                String finalReply = finalRes.getContent() +
+                        buildTimeBadges(strategyTime, toolExecTime, totalTime) +
+                        " <span style='font-size:10px; color:#ff9800;'>(极速模式)</span>";
+
+                return new ChatCompletion(finalReply, fastToolInfo, this.lastDecisionProcess, fastTrackPersona);
+            }
         }
 
-        // 3.3 [策略规则匹配] (仅当策略开启时生效)
-        String strategyPrompt = "";
-        String finalIntent = "N/A";
 
-        if (enableStrategy && preResult != null) {
-            finalIntent = preResult.getIntent();
+        // 3.3 [策略规则匹配] (意图/情绪分析结果用于策略匹配，更新人设)
+        String strategyPrompt = "";
+        String finalIntent = enableStrategy ? strategyResult.getIntent() : "N/A";
+
+        if (enableStrategy) {
             // 规则引擎匹配 (意图 + 情绪)
-            strategyPrompt = ruleEngineService.selectBestStrategy(finalIntent, preResult.getEmotion());
+            strategyPrompt = ruleEngineService.selectBestStrategy(finalIntent, strategyResult.getEmotion());
             this.lastDecisionProcess.setSelectedStrategy(strategyPrompt.isEmpty() ? "无匹配规则" : strategyPrompt);
         } else {
-            // 如果策略没开，或者只开了MCP但没命中高速通道
+            // 如果策略没开
             this.lastDecisionProcess.setSelectedStrategy("策略未启用");
         }
 
@@ -285,54 +311,42 @@ public class ChatService {
         return new ChatCompletion(finalReply, null, this.lastDecisionProcess, persona);
     }
 
-    // --- 辅助方法区 ---
-
     /**
-     * 预处理：调用小模型分析意图、情绪、敏感词及直连工具
+     * 预处理：调用【策略模型】分析意图、情绪、敏感词
      */
-    private PreProcessingResult preProcessInput(String userMessage, DecisionProcessInfo decisionProcess) {
-        String tempSessionId = getSessionId() + "_preprocessing";
-        boolean enableEmotion = configService.getEnableEmotionRecognition();
+    private PreProcessingResult runStrategyPreProcess(String userMessage, DecisionProcessInfo decisionProcess) {
+        String tempSessionId = getSessionId() + "_strategy";
 
-        // 获取 Prompt (假设 Prompt 已配置为支持 tool_name 输出)
-        String prompt = configService.getPreProcessingPrompt();
+        String prompt = configService.getPreProcessingPrompt(); // KEY_PRE_PROMPT
         if (prompt == null || prompt.isEmpty()) {
-            prompt = "分析用户意图(intent, emotion, is_sensitive, tool_name, tool_args)";
+            prompt = "分析用户意图(intent, emotion, is_sensitive)。请只输出JSON格式。";
         }
         prompt += "\n输入: \"" + userMessage + "\"";
 
         ModelParameters preParams = configService.getModelParams(ConfigService.KEY_PRE_MODEL);
-        String preProcessorModelName = preParams.getModelName();
-        decisionProcess.setPreProcessingModel(preProcessorModelName);
+        String modelName = preParams.getModelName();
 
-        // 获取服务 (带回退逻辑)
         LlmService llmService;
         try {
-            llmService = getLlmService(preProcessorModelName);
+            llmService = getLlmService(modelName);
         } catch (Exception e) {
-            log.error("获取预处理模型 '{}' 失败，回退到主模型。", preProcessorModelName);
+            log.error("获取策略模型 '{}' 失败，回退到主模型。", modelName);
             ModelParameters mainParams = configService.getModelParams(ConfigService.KEY_MAIN_MODEL);
-            preProcessorModelName = mainParams.getModelName();
-            llmService = getLlmService(preProcessorModelName);
-            decisionProcess.setPreProcessingModel(preProcessorModelName + " (回退)");
+            modelName = mainParams.getModelName();
+            llmService = getLlmService(modelName);
         }
+        decisionProcess.setPreProcessingModel("Strategy:" + modelName);
 
         try {
-            LlmResponse preResponse = llmService.chat(tempSessionId, userMessage, preProcessorModelName, prompt, null, preParams.getParametersAsMap(), null);
+            LlmResponse preResponse = llmService.chat(tempSessionId, userMessage, modelName, prompt, null, preParams.getParametersAsMap(), null);
             llmService.popConversationHistory(tempSessionId);
 
-            String jsonResponse = preResponse.getContent();
-            if (jsonResponse.contains("```json")) {
-                jsonResponse = jsonResponse.substring(jsonResponse.indexOf('{'), jsonResponse.lastIndexOf('}') + 1);
-            } else if (jsonResponse.contains("{")) {
-                int s = jsonResponse.indexOf("{");
-                int e = jsonResponse.lastIndexOf("}");
-                if(s >= 0 && e > s) jsonResponse = jsonResponse.substring(s, e + 1);
-            }
-
+            String jsonResponse = cleanLlmResponse(preResponse.getContent());
             PreProcessingResult result = objectMapper.readValue(jsonResponse, PreProcessingResult.class);
 
-            if (result.getEmotion() == null) result.setEmotion("N/A");
+            if (result.getEmotion() == null) result.setEmotion("中性");
+            if (result.getIntent() == null) result.setIntent("闲聊");
+            if (result.getIsSensitive() == null) result.setIsSensitive("false");
 
             decisionProcess.setDetectedEmotion(result.getEmotion());
             decisionProcess.setDetectedIntent(result.getIntent());
@@ -340,7 +354,7 @@ public class ChatService {
 
             return result;
         } catch (Exception e) {
-            log.error("预处理失败", e);
+            log.error("策略预处理失败", e);
             PreProcessingResult fallback = new PreProcessingResult();
             fallback.setIntent("意图不明");
             fallback.setIsSensitive("false");
@@ -348,6 +362,83 @@ public class ChatService {
             decisionProcess.setDetectedIntent("意图不明 (解析失败)");
             return fallback;
         }
+    }
+
+    /**
+     * 新增方法：调用【路由模型】分析工具调用
+     */
+    private PreProcessingResult runMcpRouterProcess(String userMessage, DecisionProcessInfo decisionProcess) {
+        String tempSessionId = getSessionId() + "_router";
+
+        String prompt = configService.getRouterProcessingPrompt(); // KEY_ROUTER_PROMPT
+        if (prompt == null || prompt.isEmpty()) {
+            prompt = "分析用户是否需要调用工具(tool_name, tool_args)。请只输出JSON格式。";
+        }
+        prompt += "\n输入: \"" + userMessage + "\"";
+
+        ModelParameters routerParams = configService.getModelParams(ConfigService.KEY_ROUTER_MODEL);
+        String modelName = routerParams.getModelName();
+
+        LlmService llmService;
+        try {
+            llmService = getLlmService(modelName);
+        } catch (Exception e) {
+            log.error("获取路由模型 '{}' 失败，回退到主模型。", modelName);
+            ModelParameters mainParams = configService.getModelParams(ConfigService.KEY_MAIN_MODEL);
+            modelName = mainParams.getModelName();
+            llmService = getLlmService(modelName);
+        }
+
+        // 更新决策模型信息，追加路由模型信息
+        String currentPreModel = decisionProcess.getPreProcessingModel();
+        if (currentPreModel == null || currentPreModel.contains("策略未启用")) {
+            decisionProcess.setPreProcessingModel("Router:" + modelName);
+        } else {
+            // 如果策略模型运行了，则显示两个模型
+            decisionProcess.setPreProcessingModel(currentPreModel + " & Router:" + modelName);
+        }
+
+        try {
+            LlmResponse routerResponse = llmService.chat(tempSessionId, userMessage, modelName, prompt, null, routerParams.getParametersAsMap(), null);
+            llmService.popConversationHistory(tempSessionId);
+
+            String jsonResponse = cleanLlmResponse(routerResponse.getContent());
+
+            // ObjectMapper.readValue 依赖 PreProcessingResult 包含 tool_name/tool_args 字段
+            PreProcessingResult result = objectMapper.readValue(jsonResponse, PreProcessingResult.class);
+
+            // 补充处理如果模型返回 null/空字符串/无 tool_name 的情况
+            if (result.getToolName() == null || result.getToolName().isEmpty() || "null".equalsIgnoreCase(result.getToolName())) {
+                result.setToolName(null);
+            }
+            if (result.getToolArgs() == null || result.getToolArgs().isEmpty() || "null".equalsIgnoreCase(result.getToolArgs())) {
+                result.setToolArgs("{}");
+            }
+
+            return result;
+        } catch (Exception e) {
+            log.error("路由预处理失败", e);
+            PreProcessingResult fallback = new PreProcessingResult();
+            fallback.setToolName(null);
+            fallback.setToolArgs("{}");
+            return fallback;
+        }
+    }
+
+    /**
+     * 辅助方法：清理LLM返回的JSON字符串
+     */
+    private String cleanLlmResponse(String rawResponse) {
+        if (rawResponse == null) return "{}";
+        String jsonResponse = rawResponse;
+        if (jsonResponse.contains("```json")) {
+            jsonResponse = jsonResponse.substring(jsonResponse.indexOf('{'), jsonResponse.lastIndexOf('}') + 1);
+        } else if (jsonResponse.contains("{")) {
+            int s = jsonResponse.indexOf("{");
+            int e = jsonResponse.lastIndexOf("}");
+            if(s >= 0 && e > s) jsonResponse = jsonResponse.substring(s, e + 1);
+        }
+        return jsonResponse;
     }
 
     /**
@@ -405,7 +496,7 @@ public class ChatService {
         sb.append("<div class='message-meta-container'>");
 
         if (strategyTime > 0) {
-            sb.append(String.format("<span class='time-badge badge-strategy'>意图分析: %dms</span>", strategyTime));
+            sb.append(String.format("<span class='time-badge badge-strategy'>预处理: %dms</span>", strategyTime)); // 统一显示为预处理
         }
 
         if (toolTime > 0) {
@@ -429,6 +520,10 @@ public class ChatService {
                 case "queryMcpFaq":
                     return toolService.queryMcpFaq(args.path("intent").asText());
                 case "getWeather":
+                    // 假设 getWeather(city, date) 优先
+                    if(args.has("date") && !args.path("date").asText().isEmpty()) {
+                        return toolService.getWeather(args.path("city").asText(), args.path("date").asText());
+                    }
                     return toolService.getWeather(args.path("city").asText());
                 case "getOilPrice":
                     return toolService.getOilPrice(args.path("province").asText());
@@ -445,7 +540,7 @@ public class ChatService {
                 case "getStockInfo":
                     return toolService.getStockInfo(args.path("symbol").asText());
                 case "webSearch":
-                    int count = args.has("count") ? args.get("count").asInt() : 5;
+                    int count = args.has("count") && args.get("count").isInt() ? args.get("count").asInt() : 5;
                     return toolService.webSearch(args.path("query").asText(), count);
                 default:
                     return "{\"error\": \"未知工具: " + toolName + "\"}";
@@ -484,8 +579,6 @@ public class ChatService {
 
         return persona;
     }
-
-    // ... (保留原有辅助方法) ...
 
     private void processResponseKeywords(String llmResponse) {
         if (llmResponse == null || llmResponse.isEmpty()) return;
