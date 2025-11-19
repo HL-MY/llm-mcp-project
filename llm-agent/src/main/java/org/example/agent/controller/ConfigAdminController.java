@@ -10,7 +10,7 @@ import org.example.agent.service.ConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-// import org.springframework.transaction.annotation.Transactional; // <-- 彻底移除此引用
+import org.springframework.transaction.annotation.Transactional; // <-- 确保引入
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,7 +44,7 @@ public class ConfigAdminController {
     }
 
     @PutMapping("/global-settings")
-    // @Transactional // <-- 彻底移除
+    @Transactional // 【必需】确保 GlobalSetting 的写入能够被提交
     public ResponseEntity<Void> saveGlobalSettings(@RequestBody Map<String, String> settings) {
         log.info("收到保存配置请求: {}", settings.keySet());
         configService.saveGlobalSettings(settings);
@@ -52,7 +52,7 @@ public class ConfigAdminController {
     }
 
     @PutMapping("/global-settings/model/{key}")
-    // @Transactional // <-- 彻底移除
+    @Transactional // 【必需】确保模型参数的写入能够被提交
     public ResponseEntity<Void> saveModelParameters(
             @PathVariable String key,
             @RequestBody ModelParameters params) throws Exception {
@@ -67,21 +67,21 @@ public class ConfigAdminController {
         return ResponseEntity.ok().build();
     }
 
-    // --- Decision Rule 规则保存修复 (全部移除 @Transactional) ---
+    // --- Decision Rule 规则保存修复 (已添加 @Transactional) ---
 
     @GetMapping("/rules")
     public ResponseEntity<List<DecisionRule>> getAllRules() { return ResponseEntity.ok(decisionRuleMapper.selectList(null)); }
 
     @PostMapping("/rules")
-    // @Transactional // <-- 彻底移除
+    @Transactional // 【修复】新增规则，需要事务来提交
     public ResponseEntity<DecisionRule> createRule(@RequestBody DecisionRule rule) {
-        rule.setId(null);
+        rule.setId(null); // 确保 ID 被置空，让数据库自增
         decisionRuleMapper.insert(rule);
         return ResponseEntity.ok(rule);
     }
 
     @PutMapping("/rules/{id}")
-    // @Transactional // <-- 彻底移除
+    @Transactional // 【修复】更新规则，需要事务来提交
     public ResponseEntity<DecisionRule> updateRule(@PathVariable("id") Integer id, @RequestBody DecisionRule rule) {
         rule.setId(id);
         decisionRuleMapper.updateById(rule);
@@ -89,13 +89,12 @@ public class ConfigAdminController {
     }
 
     @DeleteMapping("/rules/{id}")
-    // @Transactional // <-- 彻底移除
+    @Transactional // 【修复】删除规则，需要事务来提交
     public ResponseEntity<Void> deleteRule(@PathVariable("id") Integer id) {
         decisionRuleMapper.deleteById(id);
         return ResponseEntity.ok().build();
     }
 
-    // --- Strategy Methods (保持不变，因为 Service 层已移除 @Transactional) ---
 
     @GetMapping("/strategies")
     public ResponseEntity<List<Strategy>> getAllStrategies() { return ResponseEntity.ok(configService.getAllStrategies()); }

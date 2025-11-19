@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await func();
                 alert('✅ 保存成功');
-                // 保存后重新加载配置，确保显示最新值
-                await loadConfiguration(); // 重新加载以确保页面显示最新值
+                // 重新加载配置，确保显示最新值
+                await loadConfiguration();
             } catch(e) {
                 alert('❌ 保存失败: ' + e.message);
             }
@@ -187,10 +187,31 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="text-align:right; margin-top:5px;"><button class="action-btn primary-btn save-rule-btn" style="width:auto; padding:5px 15px; font-size:12px;">保存</button></div>`;
 
         div.querySelector('.rule-delete').onclick = async () => { if(confirm('删除?')) { if(rule.id>0) await api.delete(`/api/config/rules/${rule.id}`); div.remove(); }};
+
+        // 【关键修复】确保 POST 时不发送 id 字段
         div.querySelector('.save-rule-btn').onclick = async () => {
-            const data = { id: rule.id, triggerIntent: div.querySelector('.intent-input').value, triggerEmotion: div.querySelector('.emotion-input').value, strategyKey: div.querySelector('.strategy-input').value, priority: 100 };
-            if (rule.id < 0) await api.post('/api/config/rules', data); else await api.put(`/api/config/rules/${rule.id}`, data);
-            loadRules(); alert('✅ 已保存');
+            const dataToSave = {
+                triggerIntent: div.querySelector('.intent-input').value,
+                triggerEmotion: div.querySelector('.emotion-input').value,
+                strategyKey: div.querySelector('.strategy-input').value,
+                priority: 100 // 假设默认优先级为100
+            };
+
+            try {
+                if (rule.id < 0) {
+                    // 新建 (POST): 只发送 dataToSave (不带 id)
+                    await api.post('/api/config/rules', dataToSave);
+                } else {
+                    // 更新 (PUT): 需要带上 id
+                    const updateData = { ...dataToSave, id: rule.id };
+                    await api.put(`/api/config/rules/${rule.id}`, updateData);
+                }
+                loadRules();
+                alert('✅ 已保存');
+            } catch (e) {
+                alert('❌ 规则保存失败: ' + e.message);
+                console.error(e);
+            }
         };
         return div;
     };
