@@ -155,7 +155,7 @@
             </div>
 
             <div class="rule-card" id="router-model-config" style="background: #fff; border-left: 4px solid #FF9500; margin-top:15px;">
-                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">⚡ 路由小模型 (Router Agent)</div>
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">⚡ Mcp小模型 (Router Agent)</div>
 
                 <div class="rule-row">
                     <select id="router-model-name-input" class="rule-input model-select-list"></select>
@@ -210,14 +210,18 @@
             <textarea id="processes-input" rows="12" placeholder="1. 询问客户需求..."></textarea>
 
             <label>流程依赖定义 (Process Dependencies)</label>
-            <textarea id="dependencies-input" rows="4" placeholder="例如: 3.介绍业务 -> 2.确认身份, 5.结束对话 -> 4.其他帮助"></textarea>
+            <textarea id="dependencies-input" rows="4" placeholder="例如: 4 -> 3, 2&#10;5 -> 4"></textarea>
 
             <button id="save-workflow-btn" class="action-btn">💾 保存流程</button>
         </div>
 
         <div id="tools-tab" class="tab-content">
+            <div class="info-box">
+                💡 <strong>LLM工具描述：</strong> 修改这里的描述会直接影响大模型对工具的调用逻辑和准确性。
+            </div>
             <p style="font-size:12px; color:#888;">勾选要启用的 MCP 工具服务：</p>
-            <div id="tools-config-list"></div>
+            <div id="tools-config-list">
+            </div>
         </div>
 
     </div>

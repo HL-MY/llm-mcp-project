@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         safeBind('save-workflow-btn', () => saveAndReload(async () => {
             await api.saveSettings({ // <-- 确保使用 saveSettings 批量保存
                 'processes': document.getElementById('processes-input').value,
-                'dependencies': document.getElementById('dependencies-input').value // <-- 新增依赖保存
+                'dependencies': document.getElementById('dependencies-input').value
             });
         }));
     };
@@ -233,6 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("🔄 正在加载工具列表...");
         toolsListContainer.innerHTML = '<div style="padding:10px; color:#999;">加载中...</div>';
         try {
+            // ConfigAdminController 现在返回包含自定义描述和参数概括的工具列表
             const tools = await api.get('/api/config/tools');
             console.log("✅ 收到工具:", tools);
             toolsListContainer.innerHTML = '';
@@ -244,21 +245,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tools.forEach(tool => {
                 const div = document.createElement('div');
-                div.className = 'tool-item';
+                const isChecked = tool.isActive;
+                div.className = 'rule-card'; // 复用 rule-card 样式
+                div.style.borderLeft = '4px solid #4CAF50';
+                div.style.marginBottom = '15px';
+
                 div.innerHTML = `
-                    <div class="tool-info">
-                        <strong>${tool.name}</strong>
-                        <small>${tool.description}</small>
+                    <div class="tool-item" style="border:none; margin-bottom:0; padding:0;">
+                        <div class="tool-info">
+                            <strong>${tool.chineseName} (${tool.name})</strong> 
+                            <span style="font-size: 11px; color: #007AFF; display: block; margin-top: 2px;">[参数: ${tool.parameters}]</span> 
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-${tool.name}" ${isChecked ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
                     </div>
-                    <label class="toggle-switch" style="transform:scale(0.8);">
-                        <input type="checkbox" ${tool.isActive ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
+                    
+                    <div id="details-${tool.name}" class="tool-details-content" style="display: ${isChecked ? 'block' : 'none'};">
+                        <div class="rule-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed #eee;">
+                            <span class="rule-label">LLM工具描述（可自定义）</span>
+                            <textarea class="rule-input tool-desc-input" rows="3" data-tool-name="${tool.name}" id="desc-input-${tool.name}">${tool.description}</textarea>
+                        </div>
+                        <div style="text-align:right;">
+                             <button class="action-btn primary-btn save-tool-desc-btn" data-tool-name="${tool.name}" style="width:auto; padding:5px 15px; font-size:12px;">💾 保存描述</button>
+                        </div>
+                    </div>
                 `;
-                div.querySelector('input').onchange = (e) => {
-                    api.saveSetting('enable_tool_' + tool.name, e.target.checked ? 'true' : 'false')
-                        .catch(() => { e.target.checked = !e.target.checked; alert("保存失败"); });
+
+                // 1. 绑定开关和伸缩逻辑
+                const toggleInput = div.querySelector(`#toggle-${tool.name}`);
+                const detailsContent = div.querySelector(`#details-${tool.name}`);
+
+                toggleInput.onchange = (e) => {
+                    const checked = e.target.checked;
+
+                    // 1.1 保存开关状态
+                    api.saveSetting('enable_tool_' + tool.name, checked ? 'true' : 'false')
+                        .catch(() => {
+                            e.target.checked = !checked;
+                            alert("保存失败");
+                        });
+
+                    // 1.2 伸缩显示/隐藏详细内容
+                    detailsContent.style.display = checked ? 'block' : 'none';
                 };
+
+                // 2. 绑定描述保存按钮
+                div.querySelector(`.save-tool-desc-btn`).onclick = (e) => {
+                    const toolName = e.target.dataset.toolName;
+                    const newDesc = document.getElementById(`desc-input-${toolName}`).value;
+                    const key = 'tool_desc_' + toolName;
+                    api.saveSetting(key, newDesc)
+                        .then(() => {
+                            alert(`✅ ${toolName} 描述保存成功`);
+                            loadTools(); // 重新加载列表以更新显示
+                        })
+                        .catch(() => {
+                            alert(`❌ ${toolName} 描述保存失败`);
+                        });
+                };
+
                 toolsListContainer.appendChild(div);
             });
         } catch (e) {
@@ -313,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setVal('pre-processing-prompt-input', settings['pre_processing_prompt']);
             setVal('router-processing-prompt-input', settings['router_processing_prompt']);
             setVal('processes-input', settings['processes']);
-            setVal('dependencies-input', settings['dependencies']); // <-- 新增加载依赖
+            setVal('dependencies-input', settings['dependencies']);
 
             // 3. 模型参数回显
             const fillParams = (jsonStr, prefix) => {

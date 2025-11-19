@@ -44,7 +44,7 @@ public class ChatService {
     private final RuleEngineService ruleEngineService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private List<ToolDefinition> allTools; // 存储所有工具定义
+    // 【修改】移除了 private List<ToolDefinition> allTools; 字段，改为运行时动态加载
     private int silentCount = 0;
     private DecisionProcessInfo lastDecisionProcess;
 
@@ -66,12 +66,12 @@ public class ChatService {
     }
 
     /**
-     * 初始化：加载工具定义和流程
+     * 初始化：加载流程 (不再初始化硬编码工具列表)
      */
     @PostConstruct
     public void init() {
         this.processManager.updateProcesses(configService.getProcessList());
-        this.allTools = TelecomToolFactory.getAllToolDefinitions();
+        // 【修改】不再初始化 this.allTools，改为运行时加载
     }
 
     private String getSessionId() {
@@ -88,7 +88,7 @@ public class ChatService {
     }
 
     /**
-     * 处理用户消息的核心方法 (V3.5 - 逻辑解耦 + 无图标)
+     * 处理用户消息的核心方法 (V3.5 - 逻辑解耦 + 动态工具描述)
      */
     public ChatCompletion processUserMessage(String userMessage) throws IOException {
         long startTime = System.currentTimeMillis();
@@ -271,11 +271,16 @@ public class ChatService {
 
         // 4. --- 常规路径准备 ---
 
+        // 【修改】动态加载工具描述和可用工具列表
+        Map<String, String> customDescriptions = configService.getAllToolDescriptions();
+        List<ToolDefinition> customizedAllTools = TelecomToolFactory.getAllToolDefinitions(customDescriptions);
+
         // 筛选工具 (仅当MCP开启时)
         if (enableMcp) {
-            toolsToUse = this.allTools.stream()
+            toolsToUse = customizedAllTools.stream()
                     .filter(tool -> {
                         String configKey = "enable_tool_" + tool.getFunction().getName();
+                        // 【注意】这里必须用 configService.getGlobalSetting() 来获取开关状态
                         return "true".equalsIgnoreCase(configService.getGlobalSetting(configKey, "false"));
                     })
                     .collect(Collectors.toList());

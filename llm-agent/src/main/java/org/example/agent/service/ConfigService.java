@@ -11,7 +11,7 @@ import org.example.agent.dto.ModelParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-// import org.springframework.transaction.annotation.Transactional; // <-- 移除此引用
+// import org.springframework.transaction.annotation.Transactional; // <-- 彻底移除此引用
 
 import java.util.List;
 import java.util.Map;
@@ -53,6 +53,11 @@ public class ConfigService {
         this.objectMapper = objectMapper;
     }
 
+    // --- 【新增】工具描述 Key Helper ---
+    public static String getToolDescriptionKey(String toolName) {
+        return "tool_desc_" + toolName;
+    }
+
     // --- 核心：动态获取配置 (无需事务) ---
 
     public Map<String, String> getAllGlobalSettings() {
@@ -66,6 +71,18 @@ public class ConfigService {
         GlobalSetting setting = globalSettingMapper.selectOne(queryWrapper);
         return (setting != null) ? setting.getSettingValue() : defaultValue;
     }
+
+    // --- 【新增】获取所有工具的自定义描述 ---
+    public Map<String, String> getAllToolDescriptions() {
+        List<GlobalSetting> allSettings = globalSettingMapper.selectList(null);
+        return allSettings.stream()
+                .filter(s -> s.getSettingKey().startsWith("tool_desc_"))
+                .collect(Collectors.toMap(
+                        s -> s.getSettingKey().substring("tool_desc_".length()), // 提取 toolName
+                        GlobalSetting::getSettingValue
+                ));
+    }
+
 
     /**
      * 【已修改】保证原子 UPSERT 逻辑，依赖底层数据库的自动提交。
@@ -116,14 +133,11 @@ public class ConfigService {
         query.eq("strategy_type", type).eq("is_active", true);
         return strategyMapper.selectList(query).stream().collect(Collectors.toMap(Strategy::getStrategyKey, Strategy::getStrategyValue));
     }
-    // @Transactional // <-- 移除
     public Strategy saveStrategy(Strategy strategy) {
         if (strategy.getId() == null) strategyMapper.insert(strategy); else strategyMapper.updateById(strategy);
         return strategy;
     }
-    // @Transactional // <-- 移除
     public Strategy createStrategy(Strategy strategy) { strategy.setId(null); strategyMapper.insert(strategy); return strategy; }
-    // @Transactional // <-- 移除
     public void deleteStrategy(Integer id) { strategyMapper.deleteById(id); }
 
     // --- 其他 Getters (保持不变) ---

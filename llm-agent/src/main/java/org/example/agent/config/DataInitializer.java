@@ -4,11 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import jakarta.annotation.PostConstruct;
 import org.example.agent.db.entity.GlobalSetting;
 import org.example.agent.db.mapper.GlobalSettingMapper;
+import org.example.agent.factory.TelecomToolFactory;
 import org.example.agent.service.ConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 @Configuration
 public class DataInitializer {
@@ -61,6 +64,7 @@ public class DataInitializer {
                 5. 礼貌结束对话
                 """;
         initSetting(ConfigService.KEY_PROCESSES, defaultProcess);
+        initSetting(ConfigService.KEY_DEPENDENCIES, ""); // 初始化流程依赖
 
         // 5. 初始化【策略/意图分析小模型】 Prompt (KEY_PRE_PROMPT)
         String defaultPrePrompt = """
@@ -101,21 +105,17 @@ public class DataInitializer {
 
         // 7. 初始化模型参数
         initSetting(ConfigService.KEY_MAIN_MODEL, "{\"modelName\":\"qwen3-next-80b-a3b-instruct\",\"temperature\":0.7,\"topP\":0.8,\"maxTokens\":2048}");
-        // 策略模型 (低配，注重稳定性)
         initSetting(ConfigService.KEY_PRE_MODEL, "{\"modelName\":\"qwen-turbo\",\"temperature\":0.1,\"topP\":0.7,\"maxTokens\":512}");
-        // 路由模型 (低配，注重速度)
         initSetting(ConfigService.KEY_ROUTER_MODEL, "{\"modelName\":\"qwen-turbo\",\"temperature\":0.1,\"topP\":0.7,\"maxTokens\":512}");
 
-        // 8. 初始化开关
-        initSetting(ConfigService.KEY_ENABLE_WORKFLOW, "true");
-        initSetting(ConfigService.KEY_ENABLE_STRATEGY, "true");
-        initSetting(ConfigService.KEY_ENABLE_MCP, "true");
-        initSetting(ConfigService.KEY_ENABLE_EMOTION, "true");
-
-        // 9. 初始化工具开关 (默认全开，方便测试)
-        String[] tools = {"compareTwoPlans", "queryMcpFaq", "getWeather", "getOilPrice", "getGoldPrice", "getNews", "getExchangeRate", "getFundInfo", "getCurrentTimeByCity", "getStockInfo", "webSearch"};
-        for (String tool : tools) {
-            initSetting("enable_tool_" + tool, "true");
+        // 8. 初始化工具开关和描述 (新增描述初始化逻辑)
+        Map<String, String> defaultDescriptions = TelecomToolFactory.getHardcodedToolDescriptions();
+        for (Map.Entry<String, String> entry : defaultDescriptions.entrySet()) {
+            String toolName = entry.getKey();
+            // 初始化开关
+            initSetting("enable_tool_" + toolName, "true");
+            // 初始化描述
+            initSetting(ConfigService.getToolDescriptionKey(toolName), entry.getValue());
         }
 
         log.info("数据库配置检查完成。");
