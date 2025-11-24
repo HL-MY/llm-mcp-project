@@ -69,10 +69,11 @@ public class TelecomToolFactory {
         ParameterSchema parameters = ParameterSchema.builder()
                 .type("object")
                 .properties(Map.of(
-                        "city", ParameterProperty.builder().type("string").description("需要查询天气的城市名称，例如: 杭州").build(),
-                        "date", ParameterProperty.builder().type("string").description("需要查询的日期，例如 'today'。如果用户未指定，请使用 'today'。").build()
+                        "city", ParameterProperty.builder().type("string").description("需要查询天气的城市名称，例如: 杭州").build()
+//                        "date", ParameterProperty.builder().type("string").description("需要查询的日期，例如 'today'。如果用户未指定，请使用 'today'。").build()
                 ))
-                .required(List.of("city", "date"))
+//                .required(List.of("city", "date"))
+                .required(List.of("city"))
                 .build();
 
         return createBaseTool("getWeather", "查询指定城市和日期的实时天气预报。", parameters);

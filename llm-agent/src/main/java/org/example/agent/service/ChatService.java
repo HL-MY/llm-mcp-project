@@ -527,10 +527,10 @@ public class ChatService {
                 case "queryMcpFaq":
                     return toolService.queryMcpFaq(args.path("intent").asText());
                 case "getWeather":
-                    // 假设 getWeather(city, date) 优先
-                    if(args.has("date") && !args.path("date").asText().isEmpty()) {
-                        return toolService.getWeather(args.path("city").asText(), args.path("date").asText());
-                    }
+//                    // 假设 getWeather(city, date) 优先
+//                    if(args.has("date") && !args.path("date").asText().isEmpty()) {
+//                        return toolService.getWeather(args.path("city").asText(), args.path("date").asText());
+//                    }
                     return toolService.getWeather(args.path("city").asText());
                 case "getOilPrice":
                     return toolService.getOilPrice(args.path("province").asText());

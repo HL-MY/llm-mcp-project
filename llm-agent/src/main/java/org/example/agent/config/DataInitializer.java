@@ -6,11 +6,17 @@ import org.example.agent.db.entity.GlobalSetting;
 import org.example.agent.db.mapper.GlobalSettingMapper;
 import org.example.agent.factory.TelecomToolFactory;
 import org.example.agent.service.ConfigService;
+import org.example.llm.dto.tool.ParameterProperty;
+import org.example.llm.dto.tool.ParameterSchema;
+import org.example.llm.dto.tool.ToolDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -82,6 +88,9 @@ public class DataInitializer {
                 """;
         initSetting(ConfigService.KEY_PRE_PROMPT, defaultPrePrompt);
 
+        // 处理 工具描述、参数等
+        StringBuilder stringBuilder = handleAllToolsDesc();
+
         // 6. 初始化【工具路由小模型】 Prompt (KEY_ROUTER_PROMPT)
         String defaultRouterPrompt = """
                 你是一个高速工具路由助手。你的任务是判断用户是否可以直接通过调用工具解决问题，并给出调用指令。
@@ -93,8 +102,11 @@ public class DataInitializer {
                 
                 ### 2. 高速工具通道 (Fast Track)
                 仅当用户意图匹配以下【简单数据查询】工具时，才在 "tool_name" 和 "tool_args" 生成指令。
-                【支持的高速工具】: getWeather, getOilPrice, getGoldPrice, getExchangeRate, getCurrentTimeByCity, getStockInfo。
-                
+                 【支持的高速工具】:"""+
+
+                stringBuilder
+//                【支持的高速工具】: getWeather, getOilPrice, getGoldPrice, getExchangeRate, getCurrentTimeByCity, getStockInfo。
+                +"""
                 【绝对禁止】(必须留空 tool_name，交给主模型):
                 - ❌ compareTwoPlans, queryMcpFaq, webSearch -> 留空！
                 
@@ -119,6 +131,47 @@ public class DataInitializer {
         }
 
         log.info("数据库配置检查完成。");
+    }
+
+    private static StringBuilder handleAllToolsDesc() {
+        // 获取所有工具定义（传入空Map获取默认描述）
+        List<ToolDefinition> allTools = TelecomToolFactory.getAllToolDefinitions(new HashMap<>());
+        StringBuilder sb = new StringBuilder();
+        int index = 1;
+        for (ToolDefinition tool : allTools) {
+            String name = tool.getFunction().getName();
+
+            // 拼接工具名和描述
+            // 例如: 1. getWeather: 查询指定城市和日期的实时天气预报。
+            sb.append(String.format("%d. %s: %s\n", index++, name, tool.getFunction().getDescription()));
+
+            // 拼接参数详情
+            ParameterSchema params = tool.getFunction().getParameters();
+            if (params != null && params.getProperties() != null && !params.getProperties().isEmpty()) {
+                List<String> required = params.getRequired() != null ? params.getRequired() : Collections.emptyList();
+
+                // 对参数名排序，保证 Prompt 稳定性
+                params.getProperties().entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(entry -> {
+                            String paramName = entry.getKey();
+                            ParameterProperty prop = entry.getValue();
+                            boolean isReq = required.contains(paramName);
+                            String desc = prop.getDescription() != null ? prop.getDescription() : "";
+
+                            // 例如:    - city (必填): 需要查询天气的城市名称
+                            sb.append(String.format("   - %s (%s): %s\n",
+                                    paramName,
+                                    isReq ? "必填" : "选填",
+                                    desc
+                            ));
+                        });
+            } else {
+                sb.append("   - (无参数)\n");
+            }
+            sb.append("\n");
+        }
+        return sb;
     }
 
     private void initSetting(String key, String defaultValue) {
