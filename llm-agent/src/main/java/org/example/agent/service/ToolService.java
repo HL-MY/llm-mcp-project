@@ -14,6 +14,7 @@ import org.example.mcp.service.PlanService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -149,7 +150,7 @@ public class ToolService {
             return "{\"error\": \"调用 WebClient getWeather 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
-
+    @Cacheable(value = "weatherCache", key = "#city", unless = "#result.contains('\"error\"')")
     public String getWeather(String city) {
         log.info("ToolService: 正在调用 getWeather 查询天气");
         log.info("ToolService: 城市: {}", city);
@@ -191,7 +192,7 @@ public class ToolService {
 //            return "{\"error\": \"调用 WebClient getWeather 失败\", \"details\": \"" + e.getMessage() + "\"}";
 //        }
     }
-
+    @Cacheable(value = "oilPriceCache", key = "#province", unless = "#result.contains('\"error\"')")
     public String getOilPrice(String province){
         String host = "https://smjryjcx.market.alicloudapi.com";
         String path = "/oil/price";
@@ -214,7 +215,7 @@ public class ToolService {
             return "{\"error\": \"调用 WebClient getOilPrice 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
-
+    @Cacheable(value = "goldPriceCache", key = "'latest'", unless = "#result.contains('\"error\"')")
     public String getGoldPrice(){
         String host = "https://tsgold2.market.alicloudapi.com";
         String path = "/shgold";
@@ -260,6 +261,7 @@ public class ToolService {
             return "{\"error\": \"调用 WebClient getNews 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
+    @Cacheable(value = "exchangeRateCache", key = "#currency", unless = "#result.contains('\"error\"')")
     public String getExchangeRate(String currency){
         String host = "https://tsexchange.market.alicloudapi.com";
         String path = "/single";

@@ -2,18 +2,17 @@ package org.example.agent.controller;
 
 import org.example.agent.dto.ChatRequest;
 import org.example.agent.dto.ChatResponse;
+import org.example.agent.dto.DirectChatResponse;
 import org.example.agent.dto.UiState;
 import org.example.agent.service.ChatService;
 import org.example.agent.service.ChatService.ChatCompletion;
+import org.example.agent.service.DirectLlmService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 【重构】
@@ -26,9 +25,10 @@ public class WebController {
 
     private static final Logger log = LoggerFactory.getLogger(WebController.class);
     private final ChatService chatService;
-
-    public WebController(ChatService chatService) {
+    private final DirectLlmService directLlmService;
+    public WebController(ChatService chatService, DirectLlmService directLlmService) {
         this.chatService = chatService;
+        this.directLlmService = directLlmService;
     }
 
     @GetMapping("/")
@@ -84,5 +84,31 @@ public class WebController {
     public ResponseEntity<Void> saveOnExit() {
         chatService.saveHistoryOnExit();
         return ResponseEntity.ok().build();
+    }
+
+
+    @PostMapping("/api/directChat")
+    @ResponseBody
+    public ResponseEntity<DirectChatResponse> handleDirectChat(
+            @RequestParam("sessionId") String sessionId,
+            @RequestBody String userMessage) {
+
+        if (userMessage == null || userMessage.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(new DirectChatResponse("输入消息不能为空"));
+        }
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(new DirectChatResponse("会话ID（sessionId）不能为空"));
+        }
+
+        // 传入 sessionId 给 Service 层
+        String llmReply = directLlmService.getLlmReply(sessionId, userMessage);
+
+        // 检查是否有错误信息 (getLlmReply 返回的 JSON 字符串可能是错误信息)
+        if (llmReply.contains("{\"error\":")) {
+            // 如果返回的是错误JSON，返回500并带上错误信息
+            return ResponseEntity.status(500).body(new DirectChatResponse(llmReply));
+        }
+
+        return ResponseEntity.ok(new DirectChatResponse(llmReply));
     }
 }
