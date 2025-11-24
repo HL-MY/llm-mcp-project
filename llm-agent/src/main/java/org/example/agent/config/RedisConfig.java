@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.example.llm.dto.llm.LlmMessage;
+import org.example.llm.dto.llm.LlmMessage; // <-- 确保导入 LlmMessage
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -30,16 +30,16 @@ public class RedisConfig {
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
 
-        // Value 序列化器使用 Jackson JSON 序列化 (高效)
-        Jackson2JsonRedisSerializer<List<LlmMessage>> jsonSerializer =
-                new Jackson2JsonRedisSerializer<>((Class<List<LlmMessage>>)(Class<?>)List.class);
-
-        // 配置 ObjectMapper 以支持 Java 8 Date/Time API (Instant) 和私有字段访问
+        // 1. 配置 ObjectMapper
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.registerModule(new JavaTimeModule()); // 支持 Instant 等 Java 8 时间类型
 
-        jsonSerializer.setObjectMapper(objectMapper);
+        // 2. Value 序列化器使用 Jackson JSON 序列化 (高效 & 非弃用)
+        // 必须使用 TypeFactory 来构造泛型类型 List<LlmMessage>，以避免编译和运行时错误。
+        Jackson2JsonRedisSerializer<List<LlmMessage>> jsonSerializer = new Jackson2JsonRedisSerializer<>(
+                objectMapper.getTypeFactory().constructCollectionType(List.class, LlmMessage.class)
+        );
 
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
