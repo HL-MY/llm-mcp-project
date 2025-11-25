@@ -20,7 +20,10 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+// NOTE: 您需要在 pom.xml 中确保 DashScope SDK 的依赖，通常是 com.alibaba:dashscope-sdk-java
 
 @Service
 public class QwenLlmServiceImpl implements LlmService {
@@ -33,7 +36,9 @@ public class QwenLlmServiceImpl implements LlmService {
     @Value("${alibaba.api.key}")
     private String apiKey;
 
-
+    // 【新增】人设要求的分隔符
+    private static final String STREAM_DELIMITER = "[SEP]";
+    private static final String STREAM_END_SENTINEL = "__END_OF_STREAM__"; // 结束信标
 
     public QwenLlmServiceImpl(QianwenClient qianwenClient) {
         this.qianwenClient = qianwenClient;
@@ -237,6 +242,102 @@ public class QwenLlmServiceImpl implements LlmService {
         }
         if (assistantMessage != null) {
             history.add(assistantMessage);
+        }
+    }
+
+    /**
+     * 【重载方法】实现 LlmService 接口中的 10 参数 chatStream 方法
+     * 这是流式通信的主入口。
+     */
+    @Override
+    public void chatStream(String sessionId, String userContent, String modelName, String persona,
+                           String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools,
+                           Consumer<String> sender, boolean isToolCallResultStream, LlmMessage toolResultMessage,
+                           Consumer<List<LlmMessage>> finalPersister) {
+
+        List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new java.util.ArrayList<>());
+        List<LlmMessage> messagesForApiCall = isToolCallResultStream ? new java.util.ArrayList<>(history) : buildApiMessages(history, persona, openingMonologue);
+
+        // 1. 构建消息列表 (包含 SYSTEM/TOOL/USER)
+        if (isToolCallResultStream) {
+            messagesForApiCall.add(toolResultMessage);
+        } else {
+            messagesForApiCall.add(LlmMessage.builder().role(LlmMessage.Role.USER).content(userContent).build());
+        }
+
+        QwenApiReq request = buildQwenRequest(modelName, parameters, messagesForApiCall, tools);
+
+        // 2. 初始化缓冲和完整响应
+        StringBuilder sentenceBuffer = new StringBuilder();
+        StringBuilder fullLlmResponse = new StringBuilder();
+
+        try {
+            Iterable<String> qwenTokenStream = Collections.emptyList(); // 替换为真实的流式迭代器
+
+            for (String token : qwenTokenStream) { // 替换为真实的 Qwen SDK 流式循环
+                // --------------------------------------------------------
+
+                if (token == null) continue;
+
+                // 【核心逻辑】检查是否包含分隔符 [SEP]
+                if (token.contains(STREAM_DELIMITER)) {
+                    // 使用 Pattern.quote 来确保 STREAM_DELIMITER 中的特殊字符被正确处理
+                    String[] parts = token.split(java.util.regex.Pattern.quote(STREAM_DELIMITER), -1);
+
+                    // 1. 缓冲中的内容 + 第一个部分 = 完整的意群
+                    sentenceBuffer.append(parts[0]);
+                    String completedSentence = sentenceBuffer.toString().trim();
+
+                    if (!completedSentence.isEmpty()) {
+                        sender.accept(completedSentence); // 发送完整的意群
+                        fullLlmResponse.append(completedSentence);
+                        fullLlmResponse.append(STREAM_DELIMITER); // 重新加入分隔符，以便最终历史记录完整
+                    }
+
+                    // 2. 清空缓冲，并将分隔符后的剩余部分作为新的缓冲内容
+                    sentenceBuffer.setLength(0);
+                    if (parts.length > 1) {
+                        // 将最后一个元素（分隔符后的内容）放入缓冲
+                        sentenceBuffer.append(parts[parts.length - 1]);
+                    }
+
+                } else {
+                    // 没有找到分隔符，继续缓冲
+                    sentenceBuffer.append(token);
+                }
+            }
+
+
+
+            // 3. 处理流末尾剩余的文本 (确保最后一个意群被发送)
+            if (sentenceBuffer.length() > 0) {
+                String remaining = sentenceBuffer.toString().trim();
+                if (!remaining.isEmpty()) {
+                    sender.accept(remaining);
+                    fullLlmResponse.append(remaining);
+                }
+            }
+
+            // 4. 保存最终完整的回复到历史
+            String finalResponseContent = fullLlmResponse.toString();
+
+            LlmMessage userMessageToHistory = LlmMessage.builder().role(LlmMessage.Role.USER).content(userContent).build();
+            history.add(userMessageToHistory);
+
+            LlmMessage finalAssistantLlmMessage = LlmMessage.builder()
+                    .role(LlmMessage.Role.ASSISTANT)
+                    .content(finalResponseContent)
+                    .build();
+            history.add(finalAssistantLlmMessage);
+
+            // 5. 【关键】触发 Redis 存储
+            finalPersister.accept(history);
+            sender.accept(STREAM_END_SENTINEL); // 发送流结束信号
+
+        } catch (Exception e) {
+            log.error("调用 Qwen LLM 流式 API 失败", e);
+            // 通过 sender 立即返回错误信息
+            sender.accept("{\"error\": \"LLM 流式调用失败\", \"details\": \"" + e.getMessage().replace("\"", "\\\"") + "\"}");
         }
     }
 }

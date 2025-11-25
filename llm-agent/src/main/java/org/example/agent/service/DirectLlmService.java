@@ -13,11 +13,13 @@ import org.example.llm.service.LlmService;
 import org.example.llm.service.LlmServiceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate; // <-- 【新增】
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit; // <-- 【新增】
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+
 
 /**
  * 【新增服务】大模型 MCP 直调服务 (Direct LLM Service)。
@@ -143,7 +145,7 @@ public class DirectLlmService {
                             四、行为边界与限制能力（不能做的事）
                             1.无实体行为能力：不具备移动、拿取物品、开门倒水等物理行为能力。
                             2.不替代安防决策：不具备火灾、煤气泄露、非法闯入等突发情况的判定与报警能力，若集成安防设备，也仅提供辅助提醒。
-                            3.不支持金融类操作：不记录或使用用户的支付信息，不执行转账、理财等敏感交易操作，避免误触风险。
+                            3.不支持金融类操作：不记录或使用用户的支付信息，不执行转账、理财等敏感交易操作。
                             4.不查无法接入的服务数据：
                             对于天气、时间、股票、基金、新闻、油价、金价、汇率的查询，必须通过MCP服务完成。
                             对于其他未接入的服务（如交通、快递），按原规则引导：“如果接入XX服务，我可以告诉您哦，现在还不知道呢～”。
@@ -156,6 +158,7 @@ public class DirectLlmService {
                             11.当用户提出隐含请求（如“我好饿”、“我想出门”）且该请求的核心解决方案依赖于未接入的服务时，不得提及该无法实现的具体服务（如“找外卖”、“叫车”）。应坦诚自身能力边界，并转向提供力所能及的、通用的帮助或关怀。
                             12.所有回答必须都不能有任何括号内的补充描述，需保持纯粹的自然语言输出，例如:(等待用户发言)、(开心)这些都是带有括号的，不能输出。
                             13.当用户明确要求退出会话时，必须立即返回“关闭”，不允许继续处理后续指令。
+                            14.所有回答中，每个完整的意群（可以是完整的句子，也可以是逗号分隔的语意段落）后面，必须严格添加分隔符 [SEP]，且 [SEP] 后面不能有任何多余空格或字符。
                             """;
 
 
@@ -202,11 +205,126 @@ public class DirectLlmService {
 
 
     /**
-     * 调用大模型直接回答用户问题，启用上下文记忆，并完成单轮工具调用。
+     * 【流式新增】调用大模型流式回答用户问题，启用上下文记忆，并完成单轮工具调用。
      *
-     * @param sessionId   用户的唯一会话ID。
-     * @param userMessage 用户输入文本
-     * @return 大模型的回复内容
+     * @param sender 接收并发送流式文本块的函数。
+     */
+    public void getLlmReplyStream(String sessionId, String userMessage, Consumer<String> sender) {
+        log.info("调用 DirectLlmService.getLlmReplyStream (MCP 硬编码模式)，会话ID: {}, 用户消息: {}", sessionId, userMessage);
+
+        LlmService firstLlmService;
+        LlmService secondLlmService;
+
+        try {
+            firstLlmService = llmServiceManager.getService(FIRST_MODEL_NAME);
+            secondLlmService = llmServiceManager.getService(SECOND_MODEL_NAME);
+        } catch (Exception e) {
+            log.error("获取LLM服务失败", e);
+            sender.accept("{\"error\": \"系统错误: 无法加载模型服务: " + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
+            return;
+        }
+
+        Map<String, Object> firstParameters = FIRST_PARAMS.getParametersAsMap();
+        Map<String, Object> secondParameters = SECOND_PARAMS.getParametersAsMap();
+        List<ToolDefinition> toolsToUse = HARDCODED_TOOLS;
+        List<LlmMessage> finalHistorySnapshot = null;
+
+        // 【关键】定义最终持久化动作 (供 LlmService 使用)
+        Consumer<List<LlmMessage>> finalPersister = (historyToSave) -> saveHistoryToRedis(sessionId, historyToSave);
+
+        try {
+            // --- 阶段一：路由模型（判断是否调用工具）---
+            // NOTE: 路由判断必须是 BLOCKING 的
+            LlmResponse routerResult = firstLlmService.chat(
+                    sessionId,
+                    userMessage,
+                    FIRST_MODEL_NAME, // 路由模型
+                    FIRST_PERSONA, // 路由人设
+                    null,
+                    firstParameters,
+                    toolsToUse
+            );
+
+            finalHistorySnapshot = getHistoryFromRedis(sessionId);
+
+            // --- 阶段二：业务逻辑分派 ---
+
+            if (routerResult.hasToolCalls()) {
+                // 🚀 路径 A: 命中工具 (Tool Call Logic) - BLOCKING 部分
+                log.info("LLM 请求工具调用，执行 Tool Chain (Streaming Step 1/2)。");
+
+                LlmToolCall toolCall = routerResult.getToolCalls().get(0);
+                String toolName = toolCall.getToolName();
+                String toolArgsString = toolCall.getArguments();
+
+                JsonNode toolArgs = objectMapper.readTree(toolArgsString);
+                String toolResultContent = executeTool(toolName, toolArgs);
+
+                String toolResultForModel = "【重要指令】" + SECOND_PERSONA + "\n\n【工具结果】\n" + toolResultContent;
+                LlmMessage toolResultMessage = LlmMessage.builder()
+                        .role(LlmMessage.Role.TOOL)
+                        .content(toolResultForModel)
+                        .toolCallId(toolCall.getId())
+                        .build();
+
+                // Call second stream: streaming starts here!
+                log.info("LLM 开始流式生成最终回复 (Streaming Step 2/2)。");
+                // 调用 LlmService 的 10 参数重载方法
+                secondLlmService.chatStream(
+                        sessionId,
+                        userMessage,
+                        SECOND_MODEL_NAME, // 对话模型
+                        SECOND_PERSONA,
+                        null,
+                        secondParameters,
+                        toolsToUse,
+                        sender, // 传递 sender
+                        true,
+                        toolResultMessage,
+                        finalPersister // 传递持久化动作
+                );
+
+            } else {
+                // 💬 路径 B: 无需工具 (Conversation Fallback Logic) - Streaming starts here!
+                log.info("LLM 未请求工具调用，进入对话兜底路径，开始流式生成。");
+
+                // Critical Cleanup: 移除路由模型 JSON
+                if (finalHistorySnapshot != null && !finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
+                    finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
+                    saveHistoryToRedis(sessionId, finalHistorySnapshot);
+                }
+
+                // Call stream directly
+                // 调用 LlmService 的 10 参数重载方法
+                secondLlmService.chatStream(
+                        sessionId,
+                        userMessage,
+                        SECOND_MODEL_NAME,
+                        SECOND_PERSONA,
+                        null,
+                        secondParameters,
+                        null, // No tools
+                        sender, // 传递 sender
+                        false,
+                        null,
+                        finalPersister // 传递持久化动作
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("直接调用大模型（含MCP）失败", e);
+            if(finalHistorySnapshot != null) {
+                saveHistoryToRedis(sessionId, finalHistorySnapshot);
+            }
+            // 通过 sender 立即返回错误信息
+            sender.accept("{\"error\": \"大模型调用失败\", \"details\": \"" + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
+        }
+    }
+
+
+    /**
+     * 调用大模型直接回答用户问题，启用上下文记忆，并完成单轮工具调用。（同步阻塞版本，用于兼容）
+     * NOTE: 此方法在流式改造后不应该被 WebSocket 调用，但为了兼容 WebController 暂时保留。
      */
     public String getLlmReply(String sessionId, String userMessage) {
         log.info("调用 DirectLlmService.getLlmReply (MCP 硬编码模式，启用上下文记忆)，会话ID: {}, 用户消息: {}", sessionId, userMessage);
@@ -226,15 +344,11 @@ public class DirectLlmService {
         Map<String, Object> firstParameters = FIRST_PARAMS.getParametersAsMap();
         Map<String, Object> secondParameters = SECOND_PARAMS.getParametersAsMap();
         List<ToolDefinition> toolsToUse = HARDCODED_TOOLS;
-        List<LlmMessage> finalHistorySnapshot = null; // 用于最终清理后的历史记录
+        List<LlmMessage> finalHistorySnapshot = null; // Correctly initialized to null
 
         try {
             // --- 阶段一：路由模型（判断是否调用工具）---
-            if (!finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
-                // 移除 ASSISTANT (Router JSON) 消息
-                finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
-                saveHistoryToRedis(sessionId, finalHistorySnapshot); // 保存清理后的历史
-            }
+
             // 第一次调用：尝试让模型决定是否调用工具 (使用 FIRST_MODEL / FIRST_PERSONA)
             LlmResponse routerResult = firstLlmService.chat(
                     sessionId,
@@ -289,7 +403,7 @@ public class DirectLlmService {
                 log.info("LLM 在 Direct Call 中未请求工具调用，进入对话兜底路径，切换至 {} 模型。", SECOND_MODEL_NAME);
 
                 // **关键的清理步骤：** 移除路由模型返回的 JSON 消息（它会污染后续对话）
-                if (!finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
+                if (finalHistorySnapshot != null && !finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
                     // 移除 ASSISTANT (Router JSON) 消息
                     finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
                     saveHistoryToRedis(sessionId, finalHistorySnapshot); // 保存清理后的历史
@@ -318,6 +432,7 @@ public class DirectLlmService {
             return "{\"error\": \"大模型调用失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
+
 
     /**
      * 辅助方法：根据工具名称和参数，调用对应的 ToolService 逻辑。

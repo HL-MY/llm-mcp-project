@@ -29,4 +29,18 @@ public interface LlmService {
      * @param assistantMessage 机器人的回复 (可为null)
      */
     void addMessagesToHistory(String sessionId, LlmMessage userMessage, LlmMessage assistantMessage);
+
+    /**
+     * 流式聊天方法，用于 TTS 等场景的句子级流式输出。
+     * @param sender 接收并发送流式文本块（完整句子）的函数。
+     * @param isToolCallResultStream 是否是工具调用后的第二步流式调用。
+     * @param toolResultMessage 工具调用结果（仅在第二步调用时使用）。
+     */
+    void chatStream(String sessionId, String userContent, String modelName, String persona,
+                    String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools,
+                    Consumer<String> sender,
+                    boolean isToolCallResultStream,
+                    LlmMessage toolResultMessage,
+                    Consumer<List<LlmMessage>> finalPersister
+    );
 }
