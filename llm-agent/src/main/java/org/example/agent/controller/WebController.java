@@ -118,8 +118,11 @@ public class WebController {
             return ResponseEntity.status(500).body(errorResponse);
         }
 
-
-
+        if ("关闭".equals(llmReply)) {
+            // 【新增】设置 streamStatus 为 "close"
+            llmReply = "退出";
+            sessionId = null;
+        }
         // 成功返回
         DirectChatResponse successResponse = new DirectChatResponse(llmReply, sessionId);
         return ResponseEntity.ok(successResponse);

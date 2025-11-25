@@ -67,7 +67,7 @@ public class DirectChatWebSocketHandler extends TextWebSocketHandler {
                         chunkResponse = new DirectChatResponse(null, finalSessionId, "END");
                     } else if (chunk.equals("关闭")) {
                         // 收到业务退出信号
-                        chunkResponse = new DirectChatResponse("退出", null, "END"); // 退出时 streamStatus 也是 END
+                        chunkResponse = new DirectChatResponse("退出", null, null); // 退出时 streamStatus 也是 END
                     } else if (chunk.startsWith("{\"error\":")) {
                         // 错误 JSON
                         chunkResponse = new DirectChatResponse(chunk, finalSessionId, "ERROR");

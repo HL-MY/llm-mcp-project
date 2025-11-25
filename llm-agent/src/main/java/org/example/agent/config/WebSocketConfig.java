@@ -22,6 +22,4 @@ public class WebSocketConfig implements WebSocketConfigurer {
         registry.addHandler(chatHandler, "/ws/directChat")
                 .setAllowedOrigins("*"); // 允许所有来源进行连接
     }
-
-    // 【删除】不再需要 WebFlux 的 SimpleUrlHandlerMapping 和 WebSocketHandlerAdapter bean
 }

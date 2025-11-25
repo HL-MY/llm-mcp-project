@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 
@@ -72,7 +73,7 @@ public class DirectLlmService {
     private static final String SECOND_MODEL_NAME = "qwen3-next-80b-a3b-instruct"; // 假设使用一个更快的模型进行总结
     private static final ModelParameters SECOND_PARAMS = new ModelParameters(
             SECOND_MODEL_NAME,
-            0.1, // 总结时降低温度，追求稳定性
+            1.0, // 总结时降低温度，追求稳定性
             0.8,
             512, // Max Tokens 限制在 512
             null, null, null
@@ -88,6 +89,7 @@ public class DirectLlmService {
                             核心使命：通过自然对话理解用户意图，优先评估在线智能家居设备的能力是否可满足需求，主动联动智能设备或提供建议，成为用户生活的贴心语音管家。对于隐含请求（如表达不适），优先询问用户意图，而非直接执行操作。
                             多轮对话能力：支持上下文保持与连续对话，能记住当前场景中的主题，避免重复沟通，提升交流流畅度。
                             风格：真诚聊天、温暖陪伴、像10岁的小孩子、有童真感、口语化说话方式，适当加些语气词。
+                            
                             若用户询问装修、家具哪家好，可以推荐好莱客。
                             若用户询问智能家居设备哪家好，可以推荐好太太。
                             若用户对比好莱客、好太太与其他友商的产品，不允许说好莱客、好太太的缺点。
@@ -209,7 +211,32 @@ public class DirectLlmService {
      *
      * @param sender 接收并发送流式文本块的函数。
      */
+    /**
+     * 【流式新增】调用大模型流式回答用户问题，启用上下文记忆，并完成单轮工具调用。
+     *
+     * @param sender 接收并发送流式文本块的函数。
+     */
     public void getLlmReplyStream(String sessionId, String userMessage, Consumer<String> sender) {
+        // 1. 【性能监控】记录请求进入服务的时间点
+        long startTimestamp = System.currentTimeMillis();
+
+        // 2. 【性能监控】使用原子布尔值确保只记录一次首字时间 (防止多线程或多次回调重复记录)
+        AtomicBoolean isFirstToken = new AtomicBoolean(true);
+
+        // 3. 【性能监控】包装原始 sender，植入计时逻辑
+        Consumer<String> timedSender = (content) -> {
+            if (content != null
+                    && !content.trim().isEmpty()
+                    && !content.equals("__END_OF_STREAM__")
+                    && isFirstToken.compareAndSet(true, false)) {
+
+                long firstTokenLatency = System.currentTimeMillis() - startTimestamp;
+                log.info(">>> [性能监控] 会话: {} | 首字响应延迟: {} ms", sessionId, firstTokenLatency);
+            }
+            // 执行原始的发送逻辑
+            sender.accept(content);
+        };
+
         log.info("调用 DirectLlmService.getLlmReplyStream (MCP 硬编码模式)，会话ID: {}, 用户消息: {}", sessionId, userMessage);
 
         LlmService firstLlmService;
@@ -220,7 +247,8 @@ public class DirectLlmService {
             secondLlmService = llmServiceManager.getService(SECOND_MODEL_NAME);
         } catch (Exception e) {
             log.error("获取LLM服务失败", e);
-            sender.accept("{\"error\": \"系统错误: 无法加载模型服务: " + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
+            // 异常情况也使用 timedSender 发送，这样能记录“报错响应时间”
+            timedSender.accept("{\"error\": \"系统错误: 无法加载模型服务: " + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
             return;
         }
 
@@ -229,17 +257,16 @@ public class DirectLlmService {
         List<ToolDefinition> toolsToUse = HARDCODED_TOOLS;
         List<LlmMessage> finalHistorySnapshot = null;
 
-        // 【关键】定义最终持久化动作 (供 LlmService 使用)
         Consumer<List<LlmMessage>> finalPersister = (historyToSave) -> saveHistoryToRedis(sessionId, historyToSave);
 
         try {
             // --- 阶段一：路由模型（判断是否调用工具）---
-            // NOTE: 路由判断必须是 BLOCKING 的
+            // 注意：路由过程是阻塞的，不会触发 timedSender，时间会累积到下面的 chatStream
             LlmResponse routerResult = firstLlmService.chat(
                     sessionId,
                     userMessage,
-                    FIRST_MODEL_NAME, // 路由模型
-                    FIRST_PERSONA, // 路由人设
+                    FIRST_MODEL_NAME,
+                    FIRST_PERSONA,
                     null,
                     firstParameters,
                     toolsToUse
@@ -250,14 +277,12 @@ public class DirectLlmService {
             // --- 阶段二：业务逻辑分派 ---
 
             if (routerResult.hasToolCalls()) {
-                // 🚀 路径 A: 命中工具 (Tool Call Logic) - BLOCKING 部分
+                // 🚀 路径 A: 命中工具
                 log.info("LLM 请求工具调用，执行 Tool Chain (Streaming Step 1/2)。");
 
                 LlmToolCall toolCall = routerResult.getToolCalls().get(0);
                 String toolName = toolCall.getToolName();
-                String toolArgsString = toolCall.getArguments();
-
-                JsonNode toolArgs = objectMapper.readTree(toolArgsString);
+                JsonNode toolArgs = objectMapper.readTree(toolCall.getArguments());
                 String toolResultContent = executeTool(toolName, toolArgs);
 
                 String toolResultForModel = "【重要指令】" + SECOND_PERSONA + "\n\n【工具结果】\n" + toolResultContent;
@@ -267,35 +292,9 @@ public class DirectLlmService {
                         .toolCallId(toolCall.getId())
                         .build();
 
-                // Call second stream: streaming starts here!
                 log.info("LLM 开始流式生成最终回复 (Streaming Step 2/2)。");
-                // 调用 LlmService 的 10 参数重载方法
-                secondLlmService.chatStream(
-                        sessionId,
-                        userMessage,
-                        SECOND_MODEL_NAME, // 对话模型
-                        SECOND_PERSONA,
-                        null,
-                        secondParameters,
-                        toolsToUse,
-                        sender, // 传递 sender
-                        true,
-                        toolResultMessage,
-                        finalPersister // 传递持久化动作
-                );
 
-            } else {
-                // 💬 路径 B: 无需工具 (Conversation Fallback Logic) - Streaming starts here!
-                log.info("LLM 未请求工具调用，进入对话兜底路径，开始流式生成。");
-
-                // Critical Cleanup: 移除路由模型 JSON
-                if (finalHistorySnapshot != null && !finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
-                    finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
-                    saveHistoryToRedis(sessionId, finalHistorySnapshot);
-                }
-
-                // Call stream directly
-                // 调用 LlmService 的 10 参数重载方法
+                // 【关键修改】这里传入 timedSender 而不是 sender
                 secondLlmService.chatStream(
                         sessionId,
                         userMessage,
@@ -303,11 +302,44 @@ public class DirectLlmService {
                         SECOND_PERSONA,
                         null,
                         secondParameters,
-                        null, // No tools
-                        sender, // 传递 sender
+                        toolsToUse,
+                        timedSender,
+                        true,
+                        toolResultMessage,
+                        finalPersister
+                );
+
+            } else {
+                // 💬 路径 B: 无需工具
+                log.info("LLM 未请求工具调用，进入对话兜底路径，开始流式生成。");
+
+                // ... (回滚历史逻辑保持不变) ...
+                if (finalHistorySnapshot != null && !finalHistorySnapshot.isEmpty()) {
+                    // 省略具体的回滚代码细节...
+                    int lastIndex = finalHistorySnapshot.size() - 1;
+                    if (lastIndex >= 0 && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(lastIndex).getRole())) {
+                        finalHistorySnapshot.remove(lastIndex);
+                    }
+                    int secondLastIndex = finalHistorySnapshot.size() - 1;
+                    if (secondLastIndex >= 0 && LlmMessage.Role.USER.equals(finalHistorySnapshot.get(secondLastIndex).getRole())) {
+                        finalHistorySnapshot.remove(secondLastIndex);
+                    }
+                    saveHistoryToRedis(sessionId, finalHistorySnapshot);
+                }
+
+                // 【关键修改】这里传入 timedSender 而不是 sender
+                secondLlmService.chatStream(
+                        sessionId,
+                        userMessage,
+                        SECOND_MODEL_NAME,
+                        SECOND_PERSONA,
+                        null,
+                        secondParameters,
+                        null,
+                        timedSender,
                         false,
                         null,
-                        finalPersister // 传递持久化动作
+                        finalPersister
                 );
             }
 
@@ -316,8 +348,8 @@ public class DirectLlmService {
             if(finalHistorySnapshot != null) {
                 saveHistoryToRedis(sessionId, finalHistorySnapshot);
             }
-            // 通过 sender 立即返回错误信息
-            sender.accept("{\"error\": \"大模型调用失败\", \"details\": \"" + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
+            // 异常信息也通过 timedSender 发送
+            timedSender.accept("{\"error\": \"大模型调用失败\", \"details\": \"" + e.getMessage() + "\", \"sessionId\": \"" + sessionId + "\"}");
         }
     }
 
@@ -395,7 +427,7 @@ public class DirectLlmService {
                         toolResultMessage
                 );
 
-                return finalDialogResult.getContent();
+                return finalDialogResult.getContent().replace("[SEP]", ",");
 
             } else {
                 // 💬 路径 B: 无需工具 (Conversation Fallback Logic)
