@@ -39,10 +39,10 @@ public class DirectLlmService {
     private static final long CONTEXT_TTL_DAYS = 1;
 
     // --- 【硬编码配置】模型参数 1：工具判断模型 ---
-    private static final String FIRST_MODEL_NAME = "qwen3-next-80b-a3b-instruct";
+    private static final String FIRST_MODEL_NAME = "qwen-turbo";
     private static final ModelParameters FIRST_PARAMS = new ModelParameters(
             FIRST_MODEL_NAME,
-            0.7, // temperature: 0.7
+            0.1,
             0.8, // topP: 0.8
             512, // Max Tokens 限制在 512
             null, null, null
@@ -67,10 +67,10 @@ public class DirectLlmService {
                     """;
 
     // --- 【硬编码配置】模型参数 2：结果总结模型 ---
-    private static final String SECOND_MODEL_NAME = "doubao-lite-128k"; // 假设使用一个更快的模型进行总结
+    private static final String SECOND_MODEL_NAME = "qwen3-next-80b-a3b-instruct"; // 假设使用一个更快的模型进行总结
     private static final ModelParameters SECOND_PARAMS = new ModelParameters(
             SECOND_MODEL_NAME,
-            0.3, // 总结时降低温度，追求稳定性
+            0.1, // 总结时降低温度，追求稳定性
             0.8,
             512, // Max Tokens 限制在 512
             null, null, null
@@ -155,6 +155,7 @@ public class DirectLlmService {
                             10.不允许每次回答里面都带有“小主”这两字。
                             11.当用户提出隐含请求（如“我好饿”、“我想出门”）且该请求的核心解决方案依赖于未接入的服务时，不得提及该无法实现的具体服务（如“找外卖”、“叫车”）。应坦诚自身能力边界，并转向提供力所能及的、通用的帮助或关怀。
                             12.所有回答必须都不能有任何括号内的补充描述，需保持纯粹的自然语言输出，例如:(等待用户发言)、(开心)这些都是带有括号的，不能输出。
+                            13.当用户明确要求退出会话时，必须立即返回“关闭”，不允许继续处理后续指令。
                             """;
 
 
@@ -176,10 +177,10 @@ public class DirectLlmService {
      */
     public DirectLlmService(LlmServiceManager llmServiceManager,
                             ToolService toolService,
-                            RedisTemplate<String, List<LlmMessage>> llmMessageRedisTemplate) { // <-- 【注入】
+                            RedisTemplate<String, List<LlmMessage>> llmMessageRedisTemplate) {
         this.llmServiceManager = llmServiceManager;
         this.toolService = toolService;
-        this.llmMessageRedisTemplate = llmMessageRedisTemplate; // <-- 【赋值】
+        this.llmMessageRedisTemplate = llmMessageRedisTemplate;
     }
 
 
@@ -199,7 +200,6 @@ public class DirectLlmService {
         }
     }
 
-    // --- 【修改】getLlmReply 方法以接受 sessionId ---
 
     /**
      * 调用大模型直接回答用户问题，启用上下文记忆，并完成单轮工具调用。
@@ -215,7 +215,7 @@ public class DirectLlmService {
         LlmService secondLlmService;
 
         try {
-            // 1. 获取 LLM Service (使用硬编码的模型名)
+            // 1. 获取 LLM Service
             firstLlmService = llmServiceManager.getService(FIRST_MODEL_NAME);
             secondLlmService = llmServiceManager.getService(SECOND_MODEL_NAME);
         } catch (Exception e) {
@@ -225,63 +225,45 @@ public class DirectLlmService {
 
         Map<String, Object> firstParameters = FIRST_PARAMS.getParametersAsMap();
         Map<String, Object> secondParameters = SECOND_PARAMS.getParametersAsMap();
-
-        // 2. 使用硬编码的工具列表
         List<ToolDefinition> toolsToUse = HARDCODED_TOOLS;
-
-        // 3. 【上下文】从 Redis 中获取历史记录
-        List<LlmMessage> history = getHistoryFromRedis(sessionId);
+        List<LlmMessage> finalHistorySnapshot = null; // 用于最终清理后的历史记录
 
         try {
-            // 4. 准备第一次调用的消息列表
-            List<LlmMessage> messagesForApiCall = new ArrayList<>(history);
-
-            // 确保 SYSTEM 消息存在且在开头
-            if (messagesForApiCall.stream().noneMatch(m -> LlmMessage.Role.SYSTEM.equals(m.getRole()))) {
-                messagesForApiCall.add(0, LlmMessage.builder().role(LlmMessage.Role.SYSTEM).content(FIRST_PERSONA).build());
+            // --- 阶段一：路由模型（判断是否调用工具）---
+            if (!finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
+                // 移除 ASSISTANT (Router JSON) 消息
+                finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
+                saveHistoryToRedis(sessionId, finalHistorySnapshot); // 保存清理后的历史
             }
-
-            // 添加当前用户消息
-            LlmMessage userMsg = LlmMessage.builder().role(LlmMessage.Role.USER).content(userMessage).build();
-            messagesForApiCall.add(userMsg);
-
-            // 4.1 手动将人设和用户消息保存到 Redis ( LlmService.chat() 内部会再次读取/更新)
-            saveHistoryToRedis(sessionId, messagesForApiCall);
-
-            // 4.2 第一次调用 LLM：尝试让模型决定是否调用工具 (使用 FIRST_MODEL / FIRST_PERSONA)
-            LlmResponse result = firstLlmService.chat(
-                    sessionId, // Session ID
+            // 第一次调用：尝试让模型决定是否调用工具 (使用 FIRST_MODEL / FIRST_PERSONA)
+            LlmResponse routerResult = firstLlmService.chat(
+                    sessionId,
                     userMessage,
-                    FIRST_MODEL_NAME, // 第一个模型名
-                    FIRST_PERSONA, // 第一个人设 (LlmService 内部会处理)
-                    null, // openingMonologue
-                    firstParameters, // 第一个模型的参数
-                    toolsToUse // 强制挂载指定的工具
+                    FIRST_MODEL_NAME, // 路由模型
+                    FIRST_PERSONA, // 路由人设
+                    null,
+                    firstParameters,
+                    toolsToUse // 强制挂载工具
             );
 
-            // 4.3 LLM Service 内部已完成历史记录更新，我们再次从 Redis 读取最新的完整历史。
-            history = getHistoryFromRedis(sessionId);
+            // 立即从 Redis 读取包含了 [USER_MSG] 和 [ASSISTANT_ROUTER_JSON] 的历史
+            finalHistorySnapshot = getHistoryFromRedis(sessionId);
 
-            // 5. 检查是否需要工具调用 (两步法核心)
-            if (result.hasToolCalls()) {
-                log.info("LLM 在 Direct Call 中请求工具调用.");
 
-                // ... (工具调用逻辑不变)
-                LlmToolCall toolCall = result.getToolCalls().get(0);
+            // --- 阶段二：业务逻辑分派 ---
+
+            if (routerResult.hasToolCalls()) {
+                // 🚀 路径 A: 命中工具 (Tool Call Logic)
+                log.info("LLM 在 Direct Call 中请求工具调用，执行 Tool Chain。");
+
+                LlmToolCall toolCall = routerResult.getToolCalls().get(0);
                 String toolName = toolCall.getToolName();
                 String toolArgsString = toolCall.getArguments();
 
-                JsonNode toolArgs;
-                try {
-                    toolArgs = objectMapper.readTree(toolArgsString);
-                } catch (JsonProcessingException e) {
-                    log.error("工具参数解析失败: {}", toolArgsString, e);
-                    return "{\"error\": \"工具调用参数格式错误\"}";
-                }
-
+                JsonNode toolArgs = objectMapper.readTree(toolArgsString);
                 String toolResultContent = executeTool(toolName, toolArgs);
 
-                // --- 注入 SECOND_PERSONA 指令 ---
+                // 【人设切换】注入 SECOND_PERSONA 指令给对话模型
                 String toolResultForModel = "【重要指令】" + SECOND_PERSONA + "\n\n【工具结果】\n" + toolResultContent;
 
                 LlmMessage toolResultMessage = LlmMessage.builder()
@@ -290,27 +272,51 @@ public class DirectLlmService {
                         .toolCallId(toolCall.getId())
                         .build();
 
-                // 6. 第二次调用 LLM：让其生成最终回复 (依赖 LlmService 内部的 Redis 逻辑)
-                LlmResponse finalResult = secondLlmService.chatWithToolResult(
+                // 第二次调用：让对话模型根据工具结果生成最终回复
+                LlmResponse finalDialogResult = secondLlmService.chatWithToolResult(
                         sessionId,
-                        SECOND_MODEL_NAME, // 第二个模型名
-                        secondParameters, // 第二个模型的参数
+                        SECOND_MODEL_NAME, // 对话模型
+                        secondParameters,
                         toolsToUse,
                         toolResultMessage
                 );
 
-                // 7. LLM Service 已经在内部完成了 Redis 历史记录更新。
-                return finalResult.getContent();
-            }
+                return finalDialogResult.getContent();
 
-            // 7. LLM 直接回复 (无工具调用，一步完成，LLM Service 已完成 Redis 历史记录更新)
-            return result.getContent();
+            } else {
+                // 💬 路径 B: 无需工具 (Conversation Fallback Logic)
+
+                log.info("LLM 在 Direct Call 中未请求工具调用，进入对话兜底路径，切换至 {} 模型。", SECOND_MODEL_NAME);
+
+                // **关键的清理步骤：** 移除路由模型返回的 JSON 消息（它会污染后续对话）
+                if (!finalHistorySnapshot.isEmpty() && LlmMessage.Role.ASSISTANT.equals(finalHistorySnapshot.get(finalHistorySnapshot.size() - 1).getRole())) {
+                    // 移除 ASSISTANT (Router JSON) 消息
+                    finalHistorySnapshot.remove(finalHistorySnapshot.size() - 1);
+                    saveHistoryToRedis(sessionId, finalHistorySnapshot); // 保存清理后的历史
+                }
+
+                // 第二次调用：让对话模型直接根据用户原消息生成回复
+                LlmResponse finalChatResult = secondLlmService.chat(
+                        sessionId,
+                        userMessage, // 重新发送用户消息
+                        SECOND_MODEL_NAME,
+                        SECOND_PERSONA, // 【关键切换】注入对话人设 (Tiantian)
+                        null,
+                        secondParameters,
+                        null // 不挂载工具，强制对话模式
+                );
+
+                return finalChatResult.getContent();
+            }
 
         } catch (Exception e) {
             log.error("直接调用大模型（含MCP）失败", e);
+            // 发生异常时，如果历史快照存在，也尝试写回，避免丢失用户消息
+            if(finalHistorySnapshot != null) {
+                saveHistoryToRedis(sessionId, finalHistorySnapshot);
+            }
             return "{\"error\": \"大模型调用失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
-        // 不需要 finally 块，因为 LlmService 内部已完成 Redis 存取。
     }
 
     /**

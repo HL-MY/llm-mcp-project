@@ -3,12 +3,14 @@ package org.example.agent;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
  * @author hull
  * @since 2025/9/17 11:33
  */
+@EnableCaching
 @EnableFeignClients(basePackages = "org.example.llm.client")
 @SpringBootApplication(scanBasePackages = "org.example")
 @MapperScan(basePackages = {"org.example.agent.db.mapper", "org.example.mcp.db.mapper"})

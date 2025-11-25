@@ -14,6 +14,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 /**
  * 【重构】
  * 1. 这个 Controller 只负责会话 (Chat) 和页面加载 (index)。
@@ -22,7 +24,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @Controller
 public class WebController {
-
     private static final Logger log = LoggerFactory.getLogger(WebController.class);
     private final ChatService chatService;
     private final DirectLlmService directLlmService;
@@ -90,25 +91,37 @@ public class WebController {
     @PostMapping("/api/directChat")
     @ResponseBody
     public ResponseEntity<DirectChatResponse> handleDirectChat(
-            @RequestParam("sessionId") String sessionId,
-            @RequestBody String userMessage) {
+            // 【保留】HTTP POST 接口
+            @RequestBody ChatRequest chatRequest) {
+
+        String sessionId = chatRequest.getSessionId(); // 从 DTO 获取 sessionId
+        String userMessage = chatRequest.getMessage(); // 从 DTO 获取 userMessage
 
         if (userMessage == null || userMessage.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(new DirectChatResponse("输入消息不能为空"));
-        }
-        if (sessionId == null || sessionId.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(new DirectChatResponse("会话ID（sessionId）不能为空"));
+            // 如果消息为空，返回错误 DTO，携带传入的 sessionId
+            return ResponseEntity.badRequest().body(new DirectChatResponse("输入消息不能为空", sessionId));
         }
 
-        // 传入 sessionId 给 Service 层
+        // **【恢复/保留】如果客户端未提供 SessionId，则生成一个新的 UUID**
+        // 这样客户端可以使用返回的 ID 在下次调用中实现上下文
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+
+//         **【恢复】调用服务逻辑**
         String llmReply = directLlmService.getLlmReply(sessionId, userMessage);
 
-        // 检查是否有错误信息 (getLlmReply 返回的 JSON 字符串可能是错误信息)
+//         **【恢复】错误处理逻辑**
         if (llmReply.contains("{\"error\":")) {
-            // 如果返回的是错误JSON，返回500并带上错误信息
-            return ResponseEntity.status(500).body(new DirectChatResponse(llmReply));
+            // 如果服务返回了错误 JSON 字符串，将其作为 reply 字段内容返回，状态码 500
+            DirectChatResponse errorResponse = new DirectChatResponse(llmReply, sessionId);
+            return ResponseEntity.status(500).body(errorResponse);
         }
 
-        return ResponseEntity.ok(new DirectChatResponse(llmReply));
+
+
+        // 成功返回
+        DirectChatResponse successResponse = new DirectChatResponse(llmReply, sessionId);
+        return ResponseEntity.ok(successResponse);
     }
 }

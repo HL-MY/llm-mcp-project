@@ -6,6 +6,7 @@ package org.example.agent.dto;
  */
 public class ChatRequest {
     private String message;
+    private String sessionId; // 【新增】
 
     public String getMessage() {
         return message;
@@ -13,5 +14,14 @@ public class ChatRequest {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    // 【新增 Getter/Setter】
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 }

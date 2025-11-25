@@ -7,6 +7,7 @@ import org.example.llm.dto.tool.ToolDefinition;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 大模型服务的统一接口。

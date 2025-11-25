@@ -285,7 +285,7 @@ public class ToolService {
             return "{\"error\": \"调用 WebClient getExchangeRate 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
-
+    @Cacheable(value = "fundInfoCache", key = "#fundCode", unless = "#result.contains('\"error\"')")
     public String getFundInfo(String fundCode){
         String host = "https://jmjjhqcx.market.alicloudapi.com";
         String path = "/fund/detail";
@@ -308,7 +308,6 @@ public class ToolService {
             return "{\"error\": \"调用 WebClient getFundInfo 失败\", \"details\": \"" + e.getMessage() + "\"}";
         }
     }
-
     public String getCurrentTimeByCity(String city){
         String host = "https://timezone.market.alicloudapi.com";
         String path = "/timezone";
