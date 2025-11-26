@@ -2,7 +2,10 @@ package org.example.llm.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.example.llm.client.QianwenClient;
 import org.example.llm.dto.api.qwen.QwenApiReq;
 import org.example.llm.dto.api.qwen.QwenApiResp;
@@ -15,11 +18,18 @@ import org.example.llm.service.LlmService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,11 +40,19 @@ public class QwenLlmServiceImpl implements LlmService {
     private final QianwenClient qianwenClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private final WebClient webClient;
+
     @Value("${alibaba.api.key}")
     private String apiKey;
 
-    public QwenLlmServiceImpl(QianwenClient qianwenClient) {
+    private static final String STREAM_DELIMITER = "[SEP]";
+    private static final String STREAM_END_SENTINEL = "__END_OF_STREAM__";
+
+    // 【修改】构造函数注入 WebClient.Builder
+    public QwenLlmServiceImpl(QianwenClient qianwenClient, WebClient.Builder webClientBuilder) {
         this.qianwenClient = qianwenClient;
+        // 构建 WebClient 实例
+        this.webClient = webClientBuilder.build();
     }
 
     @Override
@@ -42,10 +60,10 @@ public class QwenLlmServiceImpl implements LlmService {
         return modelName != null && modelName.toLowerCase().startsWith("qwen");
     }
 
+    // ... [chat 方法保持不变] ...
     @Override
     public LlmResponse chat(String sessionId, String userContent, String modelName, String persona,
                             String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools) {
-
         List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new java.util.ArrayList<>());
         List<LlmMessage> messagesForApiCall = buildApiMessages(history, persona, openingMonologue);
 
@@ -155,12 +173,12 @@ public class QwenLlmServiceImpl implements LlmService {
     }
 
     private boolean isSpecialModel(String modelName) {
-        if (modelName == null) {
-            return false;
-        }
+        if (modelName == null) return false;
         return Set.of(
-                "qwen3-30b-a3b", "qwen3-235b-a22b", "qwen3-32b", "qwen3-14b",
-                "qwen3-8b", "qwen3-4b", "qwen3-1.7b", "qwen3-0.6b"
+                "qwen3-0.6b", "qwen3-1.7b", "qwen3-8b", "qwen3-14b",
+                "qwen3-30b-a3b", "qwen3-32b", "qwen3-235b-a22b",
+                "qwen1.5-0.5b-chat", "qwen1.5-1.8b-chat", "qwen1.5-7b-chat",
+                "qwen1.5-14b-chat", "qwen1.5-72b-chat"
         ).contains(modelName);
     }
 
@@ -190,10 +208,7 @@ public class QwenLlmServiceImpl implements LlmService {
                 log.error("序列化通义千问 tool_calls 失败", e);
             }
         }
-        return LlmMessage.builder()
-                .role(qwenMessage.getRole())
-                .content(content)
-                .build();
+        return LlmMessage.builder().role(qwenMessage.getRole()).content(content).build();
     }
 
     private QwenMessage convertLlmMessageToQwenMessage(LlmMessage llmMessage) {
@@ -211,6 +226,7 @@ public class QwenLlmServiceImpl implements LlmService {
         return QwenMessage.builder().role(llmMessage.getRole()).content(llmMessage.getContent()).build();
     }
 
+
     @Override
     public List<LlmMessage> getConversationHistory(String sessionId) {
         return conversationHistory.getOrDefault(sessionId, Collections.emptyList());
@@ -221,16 +237,155 @@ public class QwenLlmServiceImpl implements LlmService {
         return conversationHistory.remove(sessionId);
     }
 
-    // 【新增】
     @Override
     public void addMessagesToHistory(String sessionId, LlmMessage userMessage, LlmMessage assistantMessage) {
-        // 使用 computeIfAbsent 确保 history 列表存在且可变
         List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new java.util.ArrayList<>());
-        if (userMessage != null) {
-            history.add(userMessage);
+        if (userMessage != null) history.add(userMessage);
+        if (assistantMessage != null) history.add(assistantMessage);
+    }
+
+    /**
+     * 【重构】实现真实的流式调用
+     */
+    @Override
+    public void chatStream(String sessionId, String userContent, String modelName, String persona,
+                           String openingMonologue, Map<String, Object> parameters, List<ToolDefinition> tools,
+                           Consumer<String> sender, boolean isToolCallResultStream, LlmMessage toolResultMessage,
+                           Consumer<List<LlmMessage>> finalPersister) {
+
+        List<LlmMessage> history = conversationHistory.computeIfAbsent(sessionId, k -> new ArrayList<>());
+        List<LlmMessage> messagesForApiCall = isToolCallResultStream ? new ArrayList<>(history) : buildApiMessages(history, persona, openingMonologue);
+
+        if (isToolCallResultStream) {
+            messagesForApiCall.add(toolResultMessage);
+        } else {
+            messagesForApiCall.add(LlmMessage.builder().role(LlmMessage.Role.USER).content(userContent).build());
         }
-        if (assistantMessage != null) {
-            history.add(assistantMessage);
+
+        QwenApiReq request = buildQwenRequest(modelName, parameters, messagesForApiCall, tools);
+        StringBuilder sentenceBuffer = new StringBuilder();
+        StringBuilder fullLlmResponse = new StringBuilder();
+
+        AtomicReference<String> errorBuffer = new AtomicReference<>("");
+        AtomicInteger tokenCount = new AtomicInteger(0);
+
+        try {
+            ObjectNode requestJson = objectMapper.valueToTree(request);
+            if (requestJson.has("parameters")) {
+                ((ObjectNode) requestJson.get("parameters")).put("incremental_output", true);
+            }
+
+            String url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation";
+            log.info(">>> 开始流式请求 Qwen: {}", url);
+            long startTime = System.currentTimeMillis();
+
+            Iterable<String> qwenTokenStream = webClient.post()
+                    .uri(url)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("X-DashScope-SSE", "enable")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestJson)
+                    .retrieve()
+                    .bodyToFlux(String.class)
+                    .doOnNext(chunk -> {
+                        if (tokenCount.get() == 0 && !chunk.trim().startsWith("data:") && !chunk.trim().startsWith("{")) {
+                            errorBuffer.accumulateAndGet(chunk, (acc, val) -> acc + val);
+                        }
+                    })
+                    .flatMap(chunk -> Flux.fromArray(chunk.split("\\r?\\n")))
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .map(line -> {
+                        String jsonStr = line;
+                        if (line.startsWith("data:")) {
+                            jsonStr = line.substring(5).trim();
+                        }
+                        if ("[DONE]".equals(jsonStr)) return "";
+
+                        if (jsonStr.startsWith("{")) {
+                            try {
+                                MappingIterator<JsonNode> it = objectMapper.readerFor(JsonNode.class).readValues(jsonStr);
+                                StringBuilder combinedContent = new StringBuilder();
+                                while (it.hasNext()) {
+                                    JsonNode root = it.next();
+                                    if (root.has("output") && root.get("output").has("choices")) {
+                                        JsonNode choices = root.get("output").get("choices");
+                                        if (choices.size() > 0 && choices.get(0).has("message")) {
+                                            tokenCount.incrementAndGet();
+                                            combinedContent.append(choices.get(0).get("message").path("content").asText(""));
+                                        }
+                                    } else if (root.has("code") && root.has("message")) {
+                                        log.error("Qwen API 返回错误: {}", root.toPrettyString());
+                                    }
+                                }
+                                return combinedContent.toString();
+                            } catch (Exception e) { }
+                        }
+                        return "";
+                    })
+                    .filter(text -> !text.isEmpty())
+                    .toIterable();
+
+            for (String token : qwenTokenStream) {
+                if (token == null) continue;
+
+                sentenceBuffer.append(token);
+
+                int sepIndex;
+                while ((sepIndex = sentenceBuffer.indexOf(STREAM_DELIMITER)) != -1) {
+                    String completeSentence = sentenceBuffer.substring(0, sepIndex).trim();
+                    sentenceBuffer.delete(0, sepIndex + STREAM_DELIMITER.length());
+
+                    if (!completeSentence.isEmpty()) {
+                        sender.accept(completeSentence);
+                        fullLlmResponse.append(completeSentence); // 不加 SEP
+                        log.info(">>> [{}ms] 流式输出句子: {}", (System.currentTimeMillis() - startTime), completeSentence);
+                    }
+                }
+            }
+
+            log.info("<<< [{}ms] 流式请求处理完成，共接收 {} 个Token片段。", (System.currentTimeMillis() - startTime), tokenCount.get());
+
+            if (tokenCount.get() == 0) {
+                String rawError = errorBuffer.get();
+                if (rawError != null && !rawError.isEmpty()) {
+                    log.error("API调用严重错误: {}", rawError);
+                    sender.accept("{\"error\": \"API调用错误\", \"details\": " + objectMapper.writeValueAsString(rawError) + "}");
+                    return;
+                }
+            }
+
+            if (sentenceBuffer.length() > 0) {
+                String remaining = sentenceBuffer.toString().trim();
+                if (!remaining.isEmpty()) {
+                    sender.accept(remaining);
+                    fullLlmResponse.append(remaining);
+                    log.info(">>> [{}ms] 流式输出剩余: {}", (System.currentTimeMillis() - startTime), remaining);
+                }
+            }
+
+            // 【关键修复】保存历史逻辑
+            String finalResponseContent = fullLlmResponse.toString();
+            if (tokenCount.get() > 0) {
+                if (isToolCallResultStream) {
+                    // 1. 如果是工具调用的第二步，User消息早已在第一步(Router)时加入历史了。
+                    //    此时需要补上 Tool Result 消息，和 Assistant 最终回复。
+                    history.add(toolResultMessage);
+                } else {
+                    // 2. 如果是普通对话，正常添加 User 消息。
+                    history.add(LlmMessage.builder().role(LlmMessage.Role.USER).content(userContent).build());
+                }
+                // 3. 添加 Assistant 最终回复
+                history.add(LlmMessage.builder().role(LlmMessage.Role.ASSISTANT).content(finalResponseContent).build());
+
+                finalPersister.accept(history);
+            }
+
+            sender.accept(STREAM_END_SENTINEL);
+
+        } catch (Exception e) {
+            log.error("Qwen LLM 流式调用异常", e);
+            sender.accept("{\"error\": \"LLM 流式调用失败\", \"details\": \"" + e.getMessage().replace("\"", "\\\"") + "\"}");
         }
     }
 }

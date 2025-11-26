@@ -20,7 +20,10 @@
         <java.version>17</java.version>
         <spring-boot.version>3.2.4</spring-boot.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>
-        <dashscope.version>2.13.0</dashscope.version>
+
+        <dashscope.version>2.21.14</dashscope.version>
+
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -42,6 +45,25 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <version>3.5.5</version>
+                <exclusions>
+                    <exclusion>
+                        <artifactId>mybatis-spring</artifactId>
+                        <groupId>org.mybatis</groupId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.mybatis</groupId>
+                <artifactId>mybatis-spring</artifactId>
+                <version>3.0.3</version>
+            </dependency>
+
+
             <dependency>
                 <groupId>com.alibaba</groupId>
                 <artifactId>dashscope-sdk-java</artifactId>

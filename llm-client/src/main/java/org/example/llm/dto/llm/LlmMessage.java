@@ -1,13 +1,17 @@
 package org.example.llm.dto.llm;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 内部统一的、与厂商无关的消息 DTO
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class LlmMessage {
     private String role;
     private String content;

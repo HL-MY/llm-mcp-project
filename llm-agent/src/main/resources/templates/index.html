@@ -2,37 +2,26 @@
 <html lang="zh" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>LLM 流程编排器</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <title>AI 业务编排系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
 <div class="container">
+
     <div class="preview-pane">
-        <div class="status-panel">
-            <div class="panel-header">
-                <h2>流程状态</h2>
-                <div class="header-buttons">
-                    <button id="reset-btn" title="清空状态并自动保存本次对话记录">重置
-                        会话</button>
-                </div>
-            </div>
-            <ul id="process-status-list">
+        <h3 style="margin-top:0">运行状态</h3>
+        <div style="margin-bottom: 20px;">
+            <ul id="process-status-list" style="list-style:none; padding:0; font-size:13px;">
                 <li th:each="entry : ${initialState.processStatus}">
-                    <span th:class="${entry.value == 'COMPLETED' ? 'status-completed' : 'status-pending'}"></span>
+                    <span th:class="${entry.value == 'COMPLETED' ? 'status-completed' : 'status-pending'}">●</span>
                     <span th:text="${entry.key}"></span>
                 </li>
             </ul>
         </div>
-        <div class="persona-panel">
-            <h2>当前人设 (预览)</h2>
-            <p id="persona-display" th:text="${initialState.persona}"></p>
-        </div>
+        <button class="action-btn" id="reset-btn" style="background:#fff; border:1px solid #ddd;">🔄 重置会话</button>
     </div>
 
     <div class="chat-pane">
-        <div id="system-prompt" class="system-prompt-container">
-            <p>配置已加载，可以开始对话了。</p>
-        </div>
         <div class="chat-window" id="chat-window">
             <div class="message bot-message"
                  th:if="${initialState.openingMonologue != null and !initialState.openingMonologue.isEmpty()}">
@@ -40,58 +29,204 @@
             </div>
         </div>
         <div class="chat-input-area">
-            <textarea id="user-input" placeholder="输入用户的回应..." rows="3"></textarea>
+            <textarea id="user-input" placeholder="输入消息..." rows="1"></textarea>
             <button id="send-btn">发送</button>
         </div>
     </div>
 
     <div class="config-pane">
-        <div class="config-panel">
-            <h2>工作流配置</h2>
-            <label for="processes-input">流程步骤 (每行一个, *结尾代表可重复)</label>
-            <textarea id="processes-input" rows="5">1. 产品介绍*&#13;&#10;2. 升级确认*&#13;&#10;3. 升级提醒*&#13;&#10;4. 升级成功通知*&#13;&#10;5. 结束语*</textarea>
-            <label for="dependencies-input"> 依赖规则 (例如: "4 -> 3") </label>
-            <textarea id="dependencies-input" rows="3">2 -> 1&#13;&#10;3 -> 2&#13;&#10;4 -> 3&#13;&#10;5 -> 4</textarea>
-            <label for="opening-monologue-input">模型开场白</label>
-            <textarea id="opening-monologue-input" rows="3" th:text="${initialState.getOpeningMonologue()}"></textarea>
-            <label for="persona-template-input">人设模板 (使用 {tasks} 和 {workflow} 占位)</label>
-            <textarea id="persona-template-input" rows="10" th:text="${initialState.getRawPersonaTemplate()}"></textarea>
 
-            <h2 class="section-header">模型配置</h2>
-            <label for="model-name-input">模型名称</label>
-            <input type="text" id="model-name-input" th:value="${initialState.getModelName()}">
-
-            <div class="slider-container">
-                <label for="temperature-input">温度 (Temperature): <span id="temperature-value" th:text="${#numbers.formatDecimal(initialState.getTemperature(), 1, 1)}"></span></label>
-                <input type="range" id="temperature-input" min="0" max="2" step="0.1" th:value="${initialState.getTemperature()}">
+        <div class="section-title">🎛️ 功能总控</div>
+        <div class="switch-grid">
+            <div class="switch-card">
+                <div class="switch-info">
+                    <span class="switch-name">流程控制</span>
+                    <span class="switch-desc">启用 SOP 引导</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="enable-workflow-toggle">
+                    <span class="slider"></span>
+                </label>
             </div>
 
-            <div class="slider-container">
-                <label for="top-p-input">(Top P): <span id="top-p-value" th:text="${#numbers.formatDecimal(initialState.getTopP(), 1, 1)}"></span></label>
-                <input type="range" id="top-p-input" min="0.1" max="1" step="0.1" th:value="${initialState.getTopP()}">
+            <div class="switch-card">
+                <div class="switch-info">
+                    <span class="switch-name">MCP 服务</span>
+                    <span class="switch-desc">启用外部工具</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="enable-mcp-toggle">
+                    <span class="slider"></span>
+                </label>
             </div>
 
-            <div class="slider-container">
-                <label for="repetition-penalty-input">重复惩罚(RepetitionPenalty): <span id="repetition-penalty-value">1.0</span></label>
-                <input type="range" id="repetition-penalty-input" min="0" max="2" step="0.1" value="1.0">
+            <div class="switch-card">
+                <div class="switch-info">
+                    <span class="switch-name">策略决策</span>
+                    <span class="switch-desc">意图强干预</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="enable-strategy-toggle">
+                    <span class="slider"></span>
+                </label>
             </div>
 
-            <div class="slider-container">
-                <label for="presence-penalty-input">存在惩罚(PresencePenalty): <span id="presence-penalty-value">0.0</span></label>
-                <input type="range" id="presence-penalty-input" min="-2" max="2" step="0.1" value="0.0">
+            <div class="switch-card" id="emotion-switch-wrapper" style="opacity: 0.6;">
+                <div class="switch-info">
+                    <span class="switch-name">情绪感知</span>
+                    <span class="switch-desc">识别用户情绪</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="enable-emotion-toggle">
+                    <span class="slider"></span>
+                </label>
             </div>
-
-            <div class="slider-container">
-                <label for="frequency-penalty-input">频率惩罚(FrequencyPenalty): <span id="frequency-penalty-value">0.0</span></label>
-                <input type="range" id="frequency-penalty-input" min="-2" max="2" step="0.1" value="0.0">
-            </div>
-
-            <label for="max-tokens-input">最大生成字数 (MaxTokens)</label>
-            <input type="number" id="max-tokens-input" placeholder="例如: 2048">
-            <button id="save-config-btn">应用配置并清空对话</button>
         </div>
+
+        <div class="tab-container">
+            <button class="tab-button active" data-tab="model-tab">模型与人设</button>
+            <button class="tab-button" data-tab="strategy-tab">决策规则</button>
+            <button class="tab-button" data-tab="workflow-tab">流程构建</button>
+            <button class="tab-button" data-tab="tools-tab">MCP服务</button>
+        </div>
+
+        <div id="model-tab" class="tab-content active">
+
+            <div class="info-box">
+                💡 <strong>配置说明：</strong> 在此统一管理双模型架构及其人设。
+            </div>
+
+            <div class="rule-card" id="main-model-config" style="background: #fff; border-left: 4px solid #007AFF;">
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">🚀 主模型 (Main Agent)</div>
+
+                <div class="rule-row">
+                    <select id="main-model-name-input" class="rule-input model-select-list"></select>
+                </div>
+                <div class="switch-grid" style="margin-bottom:10px; gap:10px;">
+                    <div>
+                        <span class="rule-label">温度: <span id="main-temperature-value">0.7</span></span>
+                        <input type="range" id="main-temperature-input" min="0" max="2" step="0.1" value="0.7" style="width:100%">
+                    </div>
+                    <div>
+                        <span class="rule-label">Top P: <span id="main-top-p-value">0.8</span></span>
+                        <input type="range" id="main-top-p-input" min="0.1" max="1" step="0.1" value="0.8" style="width:100%">
+                    </div>
+                </div>
+                <div class="rule-row">
+                    <span class="rule-label" style="width:auto; margin-right:10px;">Max Tokens:</span>
+                    <input type="number" id="main-max-tokens-input" class="rule-input" style="flex:1;" value="2048">
+                </div>
+
+                <div class="rule-row" style="flex-direction:column; margin-top:15px;">
+                    <span class="rule-label">主人设 (System Persona)</span>
+                    <textarea id="persona-template-input" rows="4" placeholder="你是一个专业的业务办理专员..."></textarea>
+                </div>
+
+                <button id="save-main-model-btn" class="action-btn">💾 保存主模型配置</button>
+            </div>
+
+            <div class="rule-card" id="pre-model-config" style="background: #fff; border-left: 4px solid #34C759; margin-top:15px;">
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">🧠 策略小模型 (Strategy Agent)</div>
+
+                <div class="rule-row">
+                    <select id="pre-model-name-input" class="rule-input model-select-list"></select>
+                </div>
+                <div class="switch-grid" style="margin-bottom:10px; gap:10px;">
+                    <div>
+                        <span class="rule-label">温度: <span id="pre-temperature-value">0.1</span></span>
+                        <input type="range" id="pre-temperature-input" min="0" max="2" step="0.1" value="0.1" style="width:100%">
+                    </div>
+                    <div>
+                        <span class="rule-label">Top P: <span id="pre-top-p-value">0.7</span></span>
+                        <input type="range" id="pre-top-p-input" min="0.1" max="1" step="0.1" value="0.7" style="width:100%">
+                    </div>
+                </div>
+                <div class="rule-row">
+                    <span class="rule-label" style="width:auto; margin-right:10px;">Max Tokens:</span>
+                    <input type="number" id="pre-max-tokens-input" class="rule-input" style="flex:1;" value="512">
+                </div>
+
+                <div class="rule-row" style="flex-direction:column; margin-top:15px;">
+                    <span class="rule-label">策略指令 (Strategy Prompt)</span>
+                    <textarea id="pre-processing-prompt-input" rows="4" placeholder="定义意图、情绪和敏感词分析逻辑..."></textarea>
+                </div>
+
+                <button id="save-pre-model-btn" class="action-btn">💾 保存策略模型配置</button>
+            </div>
+
+            <div class="rule-card" id="router-model-config" style="background: #fff; border-left: 4px solid #FF9500; margin-top:15px;">
+                <div class="rule-label" style="color:#333; font-size:14px; margin-bottom:10px;">⚡ Mcp小模型 (Router Agent)</div>
+
+                <div class="rule-row">
+                    <select id="router-model-name-input" class="rule-input model-select-list"></select>
+                </div>
+                <div class="switch-grid" style="margin-bottom:10px; gap:10px;">
+                    <div>
+                        <span class="rule-label">温度: <span id="router-temperature-value">0.1</span></span>
+                        <input type="range" id="router-temperature-input" min="0" max="2" step="0.1" value="0.1" style="width:100%">
+                    </div>
+                    <div>
+                        <span class="rule-label">Top P: <span id="router-top-p-value">0.7</span></span>
+                        <input type="range" id="router-top-p-input" min="0.1" max="1" step="0.1" value="0.7" style="width:100%">
+                    </div>
+                </div>
+                <div class="rule-row">
+                    <span class="rule-label" style="width:auto; margin-right:10px;">Max Tokens:</span>
+                    <input type="number" id="router-max-tokens-input" class="rule-input" style="flex:1;" value="512">
+                </div>
+
+                <div class="rule-row" style="flex-direction:column; margin-top:15px;">
+                    <span class="rule-label">路由指令 (Router Prompt)</span>
+                    <textarea id="router-processing-prompt-input" rows="4" placeholder="定义工具分发和直连逻辑..."></textarea>
+                </div>
+
+                <button id="save-router-model-btn" class="action-btn">💾 保存路由模型配置</button>
+            </div>
+
+            <hr style="border:0; border-top:1px dashed #eee; margin:25px 0;">
+
+            <label>通用开场白</label>
+            <textarea id="opening-monologue-input" rows="2"></textarea>
+
+            <label>安全红线 (Redlines)</label>
+            <textarea id="safety-redlines-input" rows="2" placeholder="例如：严禁辱骂客户..."></textarea>
+
+            <button id="save-global-config-btn" class="action-btn primary-btn" style="margin-top:15px;">💾 保存全局设定</button>
+        </div>
+
+        <div id="strategy-tab" class="tab-content">
+            <div class="info-box">
+                💡 <strong>干预规则：</strong> 当策略开关开启时，这里的规则将强制覆盖 AI 的回答。
+            </div>
+            <div id="rule-cards-container" class="rule-list"></div>
+            <button id="add-new-rule-btn" class="action-btn primary-btn" style="margin-top: 15px;">+ 添加新规则</button>
+        </div>
+
+        <div id="workflow-tab" class="tab-content">
+            <div class="info-box">
+                💡 <strong>SOP 构建：：</strong> 定义业务的标准流转步骤。
+            </div>
+            <label>流程步骤定义</label>
+            <textarea id="processes-input" rows="12" placeholder="1. 询问客户需求..."></textarea>
+
+            <label>流程依赖定义 (Process Dependencies)</label>
+            <textarea id="dependencies-input" rows="4" placeholder="例如: 4 -> 3, 2&#10;5 -> 4"></textarea>
+
+            <button id="save-workflow-btn" class="action-btn">💾 保存流程</button>
+        </div>
+
+        <div id="tools-tab" class="tab-content">
+            <div class="info-box">
+                💡 <strong>LLM工具描述：</strong> 修改这里的描述会直接影响大模型对工具的调用逻辑和准确性。
+            </div>
+            <p style="font-size:12px; color:#888;">勾选要启用的 MCP 工具服务：</p>
+            <div id="tools-config-list">
+            </div>
+        </div>
+
     </div>
 </div>
-<script src="/js/script.js"></script>
+
+<script th:src="@{/js/script.js}"></script>
 </body>
 </html>
